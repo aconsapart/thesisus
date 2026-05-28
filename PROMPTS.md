@@ -1,1 +1,3 @@
 Could you combine the the kind of theorem that we need to prove, what find new strategies that likely would resolve it and figure out strategies on what would make it easier in a new prompt that would attack the problem from all of those angles and also apply strategies that would work with other strategies to make it easier and use heuristics from computation that would also give more strategies. Falsify strategies is the most important to not go down wrong paths. Execute that prompt.
+
+Keep on going and check your work and explain any jargon or high concepts look for new strategies and if you find new ones either falsify those strategies. look for possible related theorems from things that we have discovered 
