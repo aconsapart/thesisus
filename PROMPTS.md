@@ -3,16 +3,16 @@ Could you combine the the kind of theorem that we need to prove, what find new s
 Keep on going and check your work and explain any jargon or high concepts look for new strategies and if you find new ones either falsify those strategies. look for possible related theorems from things that we have discovered 
 
 
-You are continuing the Erdős divisor-sum project.
+You are continuing the {project_name} project.
 
 Ignore all previously demoted strategies.
 
 Current goal:
 
-Prove or disprove the very-short shifted-product character-sum theorem.
+Prove or disprove {theorem_lemma_or_conjecture} #the very-short shifted-product character-sum theorem.}
 
 Current frontier:
-
+{frontier_of_what_has_been_done}
 For every nondegenerate rational function F arising from the off-identity Möbius product fibers,
 
 ```
