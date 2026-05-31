@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+runs/
+proof_codex.sqlite*
+config/local_settings.yaml
+.env

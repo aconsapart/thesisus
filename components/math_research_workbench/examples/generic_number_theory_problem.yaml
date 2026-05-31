@@ -1,0 +1,31 @@
+slug: generic-number-theory-demo
+title: "Generic number theory proof-search demo"
+domain: number_theory
+background: |
+  This is a placeholder problem showing how to configure the workbench.
+  Replace the frontier with your real theorem.
+definitions:
+  - name: "Arithmetic function"
+    statement: "A function f: N -> C."
+targets:
+  - id: main-bound
+    title: "Main asymptotic bound"
+    statement: "Prove S(X) << X (log X)^C for the configured sequence."
+    status: FAILED/OPEN
+known_results:
+  - status: HEURISTIC
+    statement: "The sequence appears pseudorandom in computations."
+current_frontier: |
+  Current frontier placeholder:
+
+      Prove a bilinear character-sum estimate for a structured finite-field family,
+      or reduce it to a sharper theorem.
+falsification_tests:
+  - "Search for small counterexamples."
+  - "Check whether the theorem fails in tiny boxes."
+  - "Check algebraic degeneracies and constant-character cases."
+computation_tasks:
+  - "Run symbolic simplification of the core algebra."
+  - "Compute energy/fiber multiplicity on sample data."
+formalization_targets:
+  - "Formalize the core polynomial identities in Lean."

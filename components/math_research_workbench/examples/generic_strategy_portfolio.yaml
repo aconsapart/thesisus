@@ -1,0 +1,69 @@
+strategies:
+  - id: exact_frontier_reduction
+    name: "Exact frontier reduction"
+    rank: 1
+    description: "Attack the current theorem directly; derive exact equations and avoid broader overcounts."
+    allowed_tools: [llm, sympy, sage, magma]
+    falsification_prompts:
+      - "Find whether the proposed theorem is too strong in tiny boxes."
+      - "Search for missing constraints or overcounting."
+    proof_prompts:
+      - "Derive the exact algebraic formulation of the current frontier."
+      - "Classify exceptional loci."
+    success_criteria:
+      - "The theorem is proved or reduced to a sharper theorem."
+    failure_modes:
+      - "The target omits a required constraint."
+  - id: algebraic_degeneracy_cas
+    name: "CAS degeneracy classification"
+    rank: 2
+    description: "Use symbolic computation to find square factors, resultants, discriminants, and exceptional components."
+    allowed_tools: [sympy, sage, magma]
+    falsification_prompts:
+      - "Check if the rational functions become squares."
+      - "Check pole collapse or denominator-zero families."
+    proof_prompts:
+      - "Prove pairwise non-square outside explicit exceptional loci."
+    success_criteria:
+      - "All exceptional components are listed."
+    failure_modes:
+      - "An infinite exceptional family remains uncontrolled."
+  - id: averaged_second_moment
+    name: "Averaged second moment"
+    rank: 3
+    description: "Replace individual short-sum targets by the second moment actually needed for energy."
+    allowed_tools: [llm, sympy]
+    falsification_prompts:
+      - "Test whether individual estimates are false but averaged estimates may survive."
+    proof_prompts:
+      - "Expand the second moment and apply complete character sums or incidence estimates."
+    success_criteria:
+      - "Random-size energy follows."
+    failure_modes:
+      - "Diagonal or exceptional loci dominate."
+  - id: formalization
+    name: "Formalization of algebraic lemmas"
+    rank: 4
+    description: "Generate Lean tasks for small algebraic identities."
+    allowed_tools: [lean, aristotle]
+    falsification_prompts:
+      - "Check if an identity fails under exact algebra."
+    proof_prompts:
+      - "Formalize product formula and discriminant identity."
+    success_criteria:
+      - "Lean verifies the small lemma."
+    failure_modes:
+      - "Formal task too broad or analytic."
+  - id: strategy_discovery
+    name: "New strategy discovery"
+    rank: 99
+    description: "Find genuinely new strategies only after current ones stall."
+    allowed_tools: [llm, computation]
+    falsification_prompts:
+      - "Require a concrete falsification test for any new strategy."
+    proof_prompts:
+      - "Propose only strategies with explicit first theorem."
+    success_criteria:
+      - "New strategy has a concrete target and falsification test."
+    failure_modes:
+      - "Strategy duplicates an old route."

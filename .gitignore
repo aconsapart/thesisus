@@ -1,0 +1,15 @@
+# Local Thesius settings and databases
+config/local_cli_settings.json
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+.DS_Store
+
+# Python
+__pycache__/
+.pytest_cache/
+.venv/
+*.egg-info/
+
+# Runs/artifacts
+runs/

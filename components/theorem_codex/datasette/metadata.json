@@ -1,0 +1,14 @@
+{
+  "title": "Theorem Codex",
+  "description": "SQLite theorem ledger for proof-search workflows: theorems, claims, attempts, computations, falsifications, artifacts, and dependencies.",
+  "databases": {
+    "proof_codex": {
+      "tables": {
+        "theorem": {"sort_desc": "updated_at"},
+        "attempt": {"sort_desc": "created_at"},
+        "falsification": {"sort_desc": "created_at"},
+        "computation": {"sort_desc": "created_at"}
+      }
+    }
+  }
+}

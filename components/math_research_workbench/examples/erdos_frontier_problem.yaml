@@ -1,0 +1,59 @@
+slug: erdos-divisor-sum-frontier
+title: "Erdős divisor-sum frontier"
+domain: number_theory
+background: |
+  Core setup:
+
+      K(n)=3n+12-2σ(n),
+      s(n)=σ(n)-n,
+
+  and
+
+      A(n)=#{ d | K(n): d<K(n)/d, d+K(n)/d<=s(n)-11 }.
+
+  The primitive semiprime-side count satisfies S(n)<=A(n).
+definitions:
+  - name: "Möbius matrix"
+    statement: "M_{p,q} = [[-B, 12-B], [A, B]], with A=2(q+1)-p(q-2), B=2(p+1)(q+1)."
+  - name: "Off-identity energy"
+    statement: "E_off counts M1 M2 ~ M3 M4 away from the forced identity diagonal."
+targets:
+  - id: averaged-product-fiber-large-sieve
+    title: "Averaged product-fiber large sieve"
+    statement: "Prove a random-size second moment over product fibers for the exact (A,B)-image of short boxes."
+    status: FAILED/OPEN
+  - id: final-bound
+    title: "Final divisor-sum bound"
+    statement: "Prove sum_{n<=X} A(n) << X(log X)^C."
+    status: CONDITIONAL
+known_results:
+  - status: PROVED
+    statement: "M_{p,q} has trace zero and is a projective involution when nondegenerate."
+  - status: PROVED
+    statement: "Projective equality T_{p,q}=T_{p',q'} implies {p,q}={p',q'} mod ell, assuming ell∤6."
+  - status: COMPUTATIONAL
+    statement: "Map multiplicity, product energy, and inverse-hit statistics appear random-like in stored data."
+current_frontier: |
+  The current frontier is the exact off-identity product-fiber incidence problem.
+
+  For M_{p,q} = [[-B,12-B],[A,B]], with
+
+      A=2(q+1)-p(q-2),
+      B=2(p+1)(q+1),
+
+  prove random-sized second moment bounds for M_{p1,q1}M_{p2,q2}~R while retaining both exact constraints A and B.
+
+  Avoid overcounting by B=2(p+1)(q+1) alone.
+falsification_tests:
+  - "Check whether the shifted-product multiset w(B) overcounts exact product fibers."
+  - "Search for square rational functions F_R(z)F_R(z')."
+  - "Classify s=0, alpha=0, Q(R)=0, denominator-zero cases."
+  - "Test finite characteristic exceptions ell|6 or ell|12."
+computation_tasks:
+  - "Run SymPy/Sage/Magma pairwise degeneracy classification."
+  - "Compute product fiber multiplicities M1M2."
+  - "Check map multiplicity and subgroup concentration."
+formalization_targets:
+  - "Formalize M1M2 product formula."
+  - "Formalize the discriminant identity 36Δ=4A^2+4AB+24A+B^2-60B+36."
+  - "Formalize shifted-product hyperbola identity."

@@ -1,0 +1,14 @@
+// Magma script: pairwise degeneracy for averaged product-fiber large sieve
+// Run: magma pairwise_degeneracy.magma
+Q := Rationals();
+P<r,t,w,z,y> := PolynomialRing(Q, 5, "lex");
+alpha := r - 1 + t - w;
+Lz := z*r + (z-12)*t - z*w;
+Ly := y*r + (y-12)*t - y*w;
+F1z := 4*Lz^2 + 4*(z+6)*Lz + z^2 - 60*z + 36;
+F1y := 4*Ly^2 + 4*(y+6)*Ly + y^2 - 60*y + 36;
+"F1 degree in r:", Degree(F1z, 1);
+"disc_r(F1z):", Factorization(Discriminant(F1z, r));
+Res := Resultant(F1z, F1y, r);
+"resultant_r(F1z,F1y):", Factorization(Res);
+"STATUS: Magma F1 pairwise degeneracy script completed. Extend for F2/F1F2.";

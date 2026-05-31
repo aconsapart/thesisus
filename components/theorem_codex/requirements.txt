@@ -1,0 +1,6 @@
+streamlit>=1.45
+pandas>=2.0
+plotly>=5.20
+datasette>=0.65
+sqlite-utils>=3.36
+networkx>=3.2

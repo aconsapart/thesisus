@@ -1,0 +1,19 @@
+# Copy this file to config/local_settings.yaml and fill in your local values.
+# config/local_settings.yaml is ignored by git and should not be committed.
+
+llm:
+  provider: openai
+  model: gpt-4.1
+  # Prefer environment variables or a secret manager for production. For local-only use, you can store the key here.
+  api_key: ""
+  base_url: ""
+  temperature: 0.2
+
+formalization:
+  lean_cmd: ""
+  aristotle_cli: "aristotle"
+  aristotle_api_key: ""
+
+tools:
+  sage_cmd: "sage"
+  magma_cmd: "magma"

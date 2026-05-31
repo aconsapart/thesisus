@@ -1,0 +1,16 @@
+{
+  "title": "Math Proof Codex",
+  "description": "Theorem states, proof attempts, falsifications, computations, and formalization jobs.",
+  "databases": {
+    "proof_codex": {
+      "tables": {
+        "problem": {"sort_desc": "updated_at"},
+        "theorem": {"sort_desc": "updated_at"},
+        "attempt": {"sort_desc": "created_at"},
+        "falsification": {"sort_desc": "created_at"},
+        "computation": {"sort_desc": "created_at"},
+        "formalization_job": {"sort_desc": "updated_at"}
+      }
+    }
+  }
+}
