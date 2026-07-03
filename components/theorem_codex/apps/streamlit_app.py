@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import hmac
 import html
+import os
 import re
 import sqlite3
 import sys
@@ -250,6 +252,98 @@ textarea {
 """,
         unsafe_allow_html=True,
     )
+
+
+def oidc_enabled() -> bool:
+    try:
+        return bool(st.secrets["auth"].get("client_id"))
+    except Exception:
+        return False
+
+
+def allowed_emails() -> set[str] | None:
+    raw = os.environ.get("THESIUS_ALLOWED_EMAILS", "")
+    if not raw:
+        try:
+            value = st.secrets.get("thesius_allowed_emails", "")
+            raw = ",".join(value) if isinstance(value, (list, tuple)) else str(value or "")
+        except Exception:
+            raw = ""
+    emails = {email.strip().lower() for email in raw.split(",") if email.strip()}
+    return emails or None
+
+
+def current_user_email() -> str:
+    try:
+        return str(getattr(st.user, "email", "") or "").lower()
+    except Exception:
+        return ""
+
+
+def user_logged_in() -> bool:
+    try:
+        return bool(st.user.is_logged_in)
+    except Exception:
+        return False
+
+
+def require_oidc_login() -> None:
+    if not user_logged_in():
+        _, center_col, _ = st.columns([0.35, 0.3, 0.35])
+        with center_col:
+            st.markdown('<div class="atlas-title">Theorem Codex</div><div class="atlas-subtitle">Sign in to continue</div>', unsafe_allow_html=True)
+            st.button("Sign in", width="stretch", on_click=st.login)
+        st.stop()
+    allowed = allowed_emails()
+    if allowed is not None and current_user_email() not in allowed:
+        _, center_col, _ = st.columns([0.35, 0.3, 0.35])
+        with center_col:
+            st.markdown('<div class="atlas-title">Theorem Codex</div>', unsafe_allow_html=True)
+            st.error(f"{current_user_email() or 'This account'} is not authorized for this codex.")
+            st.button("Sign out", width="stretch", on_click=st.logout)
+        st.stop()
+
+
+def expected_password() -> str:
+    password = os.environ.get("THESIUS_PASSWORD", "")
+    if password:
+        return password
+    try:
+        return str(st.secrets.get("thesius_password", ""))
+    except Exception:
+        return ""
+
+
+def auth_enabled() -> bool:
+    return bool(expected_password())
+
+
+def _check_login() -> None:
+    password = str(st.session_state.get("login_password", ""))
+    st.session_state["login_password"] = ""
+    if hmac.compare_digest(password, expected_password()):
+        st.session_state["authenticated"] = True
+        st.session_state["login_error"] = False
+    else:
+        st.session_state["authenticated"] = False
+        st.session_state["login_error"] = True
+
+
+def require_login() -> None:
+    if oidc_enabled():
+        require_oidc_login()
+        return
+    if not auth_enabled() or st.session_state.get("authenticated"):
+        return
+    _, center_col, _ = st.columns([0.35, 0.3, 0.35])
+    with center_col:
+        st.markdown('<div class="atlas-title">Theorem Codex</div><div class="atlas-subtitle">Sign in to continue</div>', unsafe_allow_html=True)
+        with st.form("login_form"):
+            st.text_input("Password", type="password", key="login_password")
+            st.form_submit_button("Sign in", width="stretch", on_click=_check_login)
+        if st.session_state.get("login_error"):
+            st.error("Incorrect password.")
+    st.stop()
 
 
 def ensure_db() -> None:
@@ -676,6 +770,12 @@ def render_right_panel(project: pd.Series | None) -> None:
 
         with st.expander("Settings"):
             st.code(str(DB_PATH), language=None)
+            if oidc_enabled():
+                st.caption(f"Signed in as {current_user_email() or 'unknown user'}")
+                st.button("Sign out", on_click=st.logout)
+            elif auth_enabled() and st.button("Sign out"):
+                st.session_state["authenticated"] = False
+                st.rerun()
             if st.button("Initialize schema"):
                 init_db(DB_PATH)
                 st.cache_data.clear()
@@ -695,8 +795,9 @@ def default_selected_project() -> str | None:
     return str(projects.iloc[0]["slug"])
 
 
-ensure_db()
 install_css()
+require_login()
+ensure_db()
 
 if "new_project_mode" not in st.session_state:
     st.session_state["new_project_mode"] = False

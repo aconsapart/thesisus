@@ -1,0 +1,19 @@
+services:
+  theorem-codex:
+    build: .
+    ports:
+      - "8501:8501"
+    volumes:
+      - codex-data:/data
+      # For OIDC single sign-on, provide Streamlit secrets at runtime
+      # (see .streamlit/secrets.example.toml):
+      # - ./.streamlit/secrets.toml:/app/.streamlit/secrets.toml:ro
+    environment:
+      THESIUS_DB: /data/proof_codex.sqlite
+      # Require a password to use the app. Leave unset for open access
+      # (only safe on a trusted/local network).
+      THESIUS_PASSWORD: ${THESIUS_PASSWORD:-}
+    restart: unless-stopped
+
+volumes:
+  codex-data:

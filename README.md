@@ -49,6 +49,7 @@
     </li>
     <li><a href="#configuration">Configuration</a></li>
     <li><a href="#usage">Usage</a></li>
+    <li><a href="#deployment">Deployment</a></li>
     <li><a href="#testing">Testing</a></li>
     <li><a href="#roadmap">Roadmap</a></li>
     <li><a href="#contributing">Contributing</a></li>
@@ -219,6 +220,24 @@ More details:
 * `docs/INTEGRATION_GUIDE.md`
 * `docs/COMPONENTS.md`
 * `docs/TESTING.md`
+
+<p align="right">(<a href="#top">back to top</a>)</p>
+
+<!-- DEPLOYMENT -->
+## Deployment
+
+Deploy the Theorem Codex dashboard as a website with Docker:
+
+```sh
+THESIUS_PASSWORD=change-me docker compose up --build
+```
+
+The app serves on port 8501 with the SQLite database on a persistent volume,
+and requires the password whenever `THESIUS_PASSWORD` is set. Google/OIDC
+single sign-on is also supported via Streamlit secrets (see
+`.streamlit/secrets.example.toml`). See
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for cloud hosts (Fly.io, Render,
+Railway, VPS, Streamlit Community Cloud) and access-control setup.
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 

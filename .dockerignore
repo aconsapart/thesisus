@@ -1,0 +1,17 @@
+.git
+.gitignore
+# Never bake secrets into the image; mount them at runtime instead.
+.streamlit/secrets.toml
+archives
+docs
+images
+tests
+**/__pycache__
+**/*.pyc
+**/*.sqlite
+**/*.sqlite-wal
+**/*.sqlite-shm
+.venv
+venv
+*.egg-info
+.DS_Store

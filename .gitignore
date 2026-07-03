@@ -1,5 +1,6 @@
 # Local Thesius settings and databases
 config/local_cli_settings.json
+.streamlit/secrets.toml
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
