@@ -235,9 +235,11 @@ THESIUS_PASSWORD=change-me docker compose up --build
 The app serves on port 8501 with the SQLite database on a persistent volume,
 and requires the password whenever `THESIUS_PASSWORD` is set. Google/OIDC
 single sign-on is also supported via Streamlit secrets (see
-`.streamlit/secrets.example.toml`). See
-[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for cloud hosts (Fly.io, Render,
-Railway, VPS, Streamlit Community Cloud) and access-control setup.
+`.streamlit/secrets.example.toml`).
+
+Follow the step-by-step runbook in [`DEPLOY.md`](DEPLOY.md) to go live on
+Fly.io, Render/Railway, a VPS, or Streamlit Community Cloud; reference
+details are in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
