@@ -1,0 +1,31 @@
+# Fly.io configuration for the Theorem Codex dashboard.
+app = "thesius-codex"
+primary_region = "ord"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  THESIUS_DB = "/data/proof_codex.sqlite"
+
+# SQLite database on a persistent volume.
+[mounts]
+  source = "codex_data"
+  destination = "/data"
+
+# Streamlit OIDC secrets, delivered from the Fly secret store as a file
+# (set with: fly secrets set STREAMLIT_SECRETS_TOML="$(base64 -i .streamlit/secrets.toml)")
+[[files]]
+  guest_path = "/app/.streamlit/secrets.toml"
+  secret_name = "STREAMLIT_SECRETS_TOML"
+
+[http_service]
+  internal_port = 8501
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

@@ -129,6 +129,34 @@ Caddy handles the WebSocket upgrade Streamlit needs automatically.
 **Warning:** no persistent disk — the database resets on every restart.
 Demo only.
 
+## Operating the live deployment (Fly.io)
+
+The production app is **https://thesius-codex.fly.dev** (app name
+`thesius-codex`, region `ord`, volume `codex_data`).
+
+```sh
+fly deploy                # ship code changes
+fly logs                  # tail the app logs
+fly status                # machine state (auto-stops when idle)
+fly ssh console           # shell inside the machine
+```
+
+To change who can sign in (or any auth setting): edit
+`.streamlit/secrets.toml` locally, then push it into the Fly secret store —
+the machine restarts automatically:
+
+```sh
+fly secrets set STREAMLIT_SECRETS_TOML="$(base64 -i .streamlit/secrets.toml)"
+```
+
+The SQLite database lives on the `codex_data` volume, which keeps five
+scheduled snapshots (`fly volumes snapshots list vol_<id>`). For an ad-hoc
+backup, copy the file out:
+
+```sh
+fly ssh sftp get /data/proof_codex.sqlite ./backup-$(date +%Y%m%d).sqlite
+```
+
 ## Step 5 — Verify the deployment
 
 - [ ] Visiting the URL in a private browser window shows the sign-in
