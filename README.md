@@ -5,7 +5,6 @@
 [![Forks][forks-shield]][forks-url]
 [![Stargazers][stars-shield]][stars-url]
 [![Issues][issues-shield]][issues-url]
-[![MIT License][license-shield]][license-url]
 
 <!-- PROJECT LOGO -->
 <br />
@@ -53,7 +52,6 @@
     <li><a href="#testing">Testing</a></li>
     <li><a href="#roadmap">Roadmap</a></li>
     <li><a href="#contributing">Contributing</a></li>
-    <li><a href="#license">License</a></li>
     <li><a href="#contact">Contact</a></li>
     <li><a href="#acknowledgments">Acknowledgments</a></li>
   </ol>
@@ -294,13 +292,6 @@ pytest -q
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
-<!-- LICENSE -->
-## License
-
-Distributed under the MIT License. See `LICENSE.txt` for more information.
-
-<p align="right">(<a href="#top">back to top</a>)</p>
-
 <!-- CONTACT -->
 ## Contact
 
@@ -326,6 +317,4 @@ The README layout follows the structure of [Best-README-Template](https://github
 [stars-url]: https://github.com/aconsapart/thesys/stargazers
 [issues-shield]: https://img.shields.io/github/issues/aconsapart/thesys.svg?style=for-the-badge
 [issues-url]: https://github.com/aconsapart/thesys/issues
-[license-shield]: https://img.shields.io/github/license/aconsapart/thesys.svg?style=for-the-badge
-[license-url]: https://github.com/aconsapart/thesys/blob/master/LICENSE.txt
 [product-screenshot]: images/screenshot.png
