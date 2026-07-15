@@ -40,8 +40,9 @@ print(factor(F1z.discriminant(r)))
 Res = F1z.resultant(F1y, r)
 print('resultant_r(F1z,F1y) factor:')
 print(factor(Res))
-print('squarefree decomposition of resultant:')
-print(factor(Res.squarefree_part()))
+print('squarefree part of resultant:')
+# MPolynomial_libsingular has no squarefree_part(); rebuild it from the factorization
+print(factor(prod(f for f, m in Res.factor())))
 if Res % ((y-z)^2) == 0:
     core = Res // ((y-z)^2)
 else:
