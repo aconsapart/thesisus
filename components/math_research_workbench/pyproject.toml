@@ -4,9 +4,32 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "math-research-workbench"
-version = "0.1.0"
-description = "Configurable proof-search automation workbench for mathematical research"
+version = "0.2.0"
+description = "Configurable proof-and-refutation workbench for mathematical research"
 requires-python = ">=3.10"
+dependencies = [
+  "sympy",
+  "pyyaml",
+]
+
+[project.optional-dependencies]
+# The counterexample sweep runs on the base dependencies alone. LangGraph is
+# only needed for the full proof pipeline.
+agents = [
+  "langgraph",
+  "langchain",
+  "langchain-openai",
+]
+test = [
+  "pytest>=8.0",
+]
+
+[project.scripts]
+math-workbench-sweep = "math_workbench.sweep:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

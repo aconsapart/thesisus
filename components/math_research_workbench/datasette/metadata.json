@@ -1,15 +1,53 @@
 {
   "title": "Math Proof Codex",
-  "description": "Theorem states, proof attempts, falsifications, computations, and formalization jobs.",
+  "description": "Two tracks side by side: theorems proved, and conjectures refuted by checked counterexamples.",
   "databases": {
     "proof_codex": {
       "tables": {
         "problem": {"sort_desc": "updated_at"},
         "theorem": {"sort_desc": "updated_at"},
+        "conjecture": {
+          "sort_desc": "updated_at",
+          "description": "Universally quantified claims with machine-checkable predicates. FALSIFIED means a witness was found and independently verified; VERIFIED_EXHAUSTIVE means the whole declared space was searched without finding one, which proves the claim over that space and nowhere else."
+        },
+        "counterexample": {
+          "sort_desc": "created_at",
+          "description": "Concrete witnesses and how each was checked. VERIFIED_EXACT means two independent evaluators agreed; CONTESTED means they disagreed and one of them has a bug; REJECTED means the claim did not survive checking."
+        },
         "attempt": {"sort_desc": "created_at"},
-        "falsification": {"sort_desc": "created_at"},
+        "falsification": {
+          "sort_desc": "created_at",
+          "description": "Obstructions that block a route, with or without an explicit witness."
+        },
         "computation": {"sort_desc": "created_at"},
         "formalization_job": {"sort_desc": "updated_at"}
+      },
+      "queries": {
+        "conjecture_board": {
+          "title": "Conjecture board",
+          "description": "Every declared conjecture with its verdict and witness counts.",
+          "sql": "select * from v_conjecture_board"
+        },
+        "verified_counterexamples": {
+          "title": "Verified counterexamples",
+          "description": "Witnesses that survived independent checking.",
+          "sql": "select * from v_verified_counterexamples"
+        },
+        "contested_counterexamples": {
+          "title": "Contested counterexamples (investigate first)",
+          "description": "Assignments the two evaluators disagreed about. A non-empty result is a bug, not a mathematical finding, and blocks any refutation that depends on it.",
+          "sql": "select * from v_contested_counterexamples"
+        },
+        "discarded_claims": {
+          "title": "Discarded witness claims",
+          "description": "Proposed counterexamples that failed independent checking, newest first. A strategy that keeps appearing here is proposing witnesses it has not checked.",
+          "sql": "select c.created_at, cj.slug as conjecture, c.witness_md, c.source, c.verifier_notes_md, c.rationale_md from counterexample c left join conjecture cj on cj.id = c.conjecture_id where c.verification in ('REJECTED','UNCHECKED') order by c.created_at desc"
+        },
+        "refutation_yield_by_strategy": {
+          "title": "Refutation yield by strategy",
+          "description": "Which lanes actually produce witnesses that survive checking.",
+          "sql": "select s.slug as strategy, count(*) as claims, sum(case when c.verification in ('VERIFIED_EXACT','VERIFIED_SINGLE') then 1 else 0 end) as survived, sum(case when c.verification = 'REJECTED' then 1 else 0 end) as discarded from counterexample c join strategy s on s.id = c.strategy_id group by s.slug order by survived desc, claims desc"
+        }
       }
     }
   }

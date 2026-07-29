@@ -33,10 +33,47 @@ st.set_page_config(page_title="Math Proof Codex", layout="wide")
 st.title("Math Proof Codex")
 st.caption(f"Database: {DB_PATH}")
 
-tabs = st.tabs(["Frontier", "Theorems", "Strategies", "Attempts", "Falsifications", "Computations", "Formalization", "SQL"])
+tabs = st.tabs([
+    "Frontier",
+    "Theorems",
+    "Conjectures",
+    "Counterexamples",
+    "Strategies",
+    "Attempts",
+    "Falsifications",
+    "Computations",
+    "Formalization",
+    "SQL",
+])
 
 with tabs[0]:
     st.header("Current frontier")
+
+    # Both tracks at a glance. A run that only ever proves things and a run that
+    # never finds a counterexample look identical without this row.
+    proved = query("select count(*) as n from theorem where status='PROVED'")
+    falsified = query("select count(*) as n from theorem where status='FALSIFIED'")
+    witnesses = query("select count(*) as n from counterexample where verification='VERIFIED_EXACT'")
+    contested = query("select count(*) as n from counterexample where verification='CONTESTED'")
+    discarded = query("select count(*) as n from counterexample where verification='REJECTED'")
+
+    def scalar(df, default=0):
+        return int(df["n"].iloc[0]) if not df.empty else default
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Proved", scalar(proved))
+    c2.metric("Falsified", scalar(falsified))
+    c3.metric("Verified witnesses", scalar(witnesses))
+    c4.metric("Claims discarded", scalar(discarded), help="Proposed witnesses that failed independent checking.")
+    c5.metric("Contested", scalar(contested), help="Evaluators disagreed. This is a bug to investigate, not a result.")
+
+    if scalar(contested):
+        st.error(
+            f"{scalar(contested)} witness(es) are CONTESTED: the rational and symbolic evaluators "
+            "disagree about them. One of the two is wrong. No refutation should be trusted until "
+            "this is resolved -- see the Counterexamples tab."
+        )
+
     st.dataframe(query("""
         select p.title as problem, t.slug, t.title, t.status, t.frontier_rank, t.updated_at
         from theorem t join problem p on p.id=t.problem_id
@@ -48,7 +85,7 @@ with tabs[0]:
 
 with tabs[1]:
     st.header("Theorem ledger")
-    status = st.selectbox("Status", ["ALL", "PROVED", "CONDITIONAL", "COMPUTATIONAL", "HEURISTIC", "FAILED/OPEN"])
+    status = st.selectbox("Status", ["ALL", "PROVED", "CONDITIONAL", "COMPUTATIONAL", "HEURISTIC", "FAILED/OPEN", "FALSIFIED"])
     if status == "ALL":
         df = query("""
             select t.id, p.slug as problem, t.slug, t.title, t.status, t.frontier_rank, t.updated_at
@@ -65,10 +102,60 @@ with tabs[1]:
     st.dataframe(df, use_container_width=True)
 
 with tabs[2]:
+    st.header("Conjectures")
+    st.caption(
+        "Machine-checkable claims declared in the problem spec. FALSIFIED means a witness "
+        "was found and independently checked. VERIFIED_EXHAUSTIVE means no witness exists "
+        "anywhere in the declared space -- a proof over that space only. OPEN means the "
+        "search settled nothing."
+    )
+    st.dataframe(query("select * from v_conjecture_board"), use_container_width=True)
+    st.subheader("Full specifications")
+    st.dataframe(query("""
+        select cj.slug, cj.status, cj.statement_md, cj.predicate, cj.variables_json,
+               cj.assumptions_json, cj.space_size, cj.updated_at
+        from conjecture cj order by cj.updated_at desc
+    """), use_container_width=True)
+
+with tabs[3]:
+    st.header("Counterexamples")
+
+    contested_df = query("select * from v_contested_counterexamples")
+    if not contested_df.empty:
+        st.error(
+            "The two independent evaluators disagreed about the witnesses below. "
+            "One of them has a bug. Nothing here is evidence until that is resolved."
+        )
+        st.dataframe(contested_df, use_container_width=True)
+
+    st.subheader("Verified")
+    st.caption(
+        "VERIFIED_EXACT: the rational and the symbolic evaluator independently agree the "
+        "predicate fails at this assignment. VERIFIED_SINGLE: only one evaluator could "
+        "decide it, so it is weaker evidence."
+    )
+    st.dataframe(query("select * from v_verified_counterexamples"), use_container_width=True)
+
+    st.subheader("Discarded claims")
+    st.caption(
+        "Witnesses that were proposed and did not survive checking. Kept deliberately: "
+        "a lane that keeps proposing the same dead assignment is a lane worth demoting."
+    )
+    st.dataframe(query("""
+        select c.id, cj.slug as conjecture, c.witness_md, c.source, c.verifier_notes_md,
+               c.rationale_md, c.iteration, c.created_at
+        from counterexample c
+        left join conjecture cj on cj.id=c.conjecture_id
+        where c.verification in ('REJECTED','UNCHECKED')
+        order by c.created_at desc
+        limit 200
+    """), use_container_width=True)
+
+with tabs[4]:
     st.header("Strategies")
     st.dataframe(query("select id, slug, name, rank, status, score, updated_at from strategy order by rank, score desc"), use_container_width=True)
 
-with tabs[3]:
+with tabs[5]:
     st.header("Attempts")
     st.dataframe(query("""
         select a.id, p.slug as problem, s.slug as strategy, a.iteration, a.status, a.created_at,
@@ -80,7 +167,7 @@ with tabs[3]:
         limit 200
     """), use_container_width=True)
 
-with tabs[4]:
+with tabs[6]:
     st.header("Falsifications")
     st.dataframe(query("""
         select f.id, p.slug as problem, s.slug as strategy, f.severity, f.created_at,
@@ -91,7 +178,7 @@ with tabs[4]:
         order by f.created_at desc
     """), use_container_width=True)
 
-with tabs[5]:
+with tabs[7]:
     st.header("Computations")
     st.dataframe(query("""
         select c.id, p.slug as problem, c.iteration, c.name, c.status, c.code_path, c.data_path, c.report_path, c.created_at
@@ -101,7 +188,7 @@ with tabs[5]:
         limit 200
     """), use_container_width=True)
 
-with tabs[6]:
+with tabs[8]:
     st.header("Formalization")
     st.dataframe(query("""
         select f.id, p.slug as problem, f.backend, f.status, f.lean_path, f.updated_at
@@ -110,7 +197,7 @@ with tabs[6]:
         order by f.updated_at desc
     """), use_container_width=True)
 
-with tabs[7]:
+with tabs[9]:
     st.header("SQL")
     sql = st.text_area("Query", "select * from theorem limit 20", height=160)
     if st.button("Run query"):

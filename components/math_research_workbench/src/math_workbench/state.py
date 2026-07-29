@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from typing import Any, Literal, TypedDict
 
-Status = Literal["PROVED", "CONDITIONAL", "COMPUTATIONAL", "HEURISTIC", "FAILED/OPEN"]
+# FALSIFIED is a terminal outcome, not a failure to progress. FAILED/OPEN means
+# "we could not settle this"; FALSIFIED means "we settled it, negatively, and
+# here is the witness".
+Status = Literal["PROVED", "CONDITIONAL", "COMPUTATIONAL", "HEURISTIC", "FAILED/OPEN", "FALSIFIED"]
+
+# How an iteration ended. `OPEN` is the only one that justifies another pass.
+Resolution = Literal["OPEN", "PROVED", "FALSIFIED"]
 
 
 class Finding(TypedDict):
@@ -18,9 +24,11 @@ class WorkbenchState(TypedDict):
     iteration: int
     max_iterations: int
     parallel_strategies: int
+    parallel_refutations: int
     problem: dict[str, Any]
     strategies: list[dict[str, Any]]
     active_strategies: list[dict[str, Any]]
+    active_refuters: list[dict[str, Any]]
     proof_ledger: list[Finding]
     failed_strategies: list[str]
     computations: list[Finding]
@@ -35,3 +43,23 @@ class WorkbenchState(TypedDict):
     synthesis: str
     discovery_report: str
     resolved: bool
+
+    # --- refutation track ---------------------------------------------
+    # `conjectures` are the executable claims declared in the problem spec.
+    # `search_outcomes` is what the automated search established about each.
+    # `verified_counterexamples` holds only witnesses that survived independent
+    # checking; `contested_witnesses` holds disagreements between the two
+    # evaluators, which are bugs to investigate and never evidence.
+    conjectures: list[dict[str, Any]]
+    search_outcomes: list[dict[str, Any]]
+    claimed_witnesses: list[dict[str, Any]]
+    verified_counterexamples: list[dict[str, Any]]
+    contested_witnesses: list[dict[str, Any]]
+    discarded_witnesses: list[dict[str, Any]]
+    falsified_conjectures: list[str]
+    exhaustively_verified: list[str]
+    refutation_reports: list[dict[str, str]]
+    refutation_report: str
+    repair_report: str
+    frontier_falsified: bool
+    resolution: Resolution

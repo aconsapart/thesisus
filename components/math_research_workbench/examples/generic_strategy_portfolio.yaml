@@ -1,7 +1,19 @@
+# Every strategy declares a `mode`:
+#
+#   PROVE   - a proof lane. Asked to falsify its own approach first, but its
+#             deliverable is a proof, reduction, or sharper theorem.
+#   REFUTE  - a refutation lane. Its deliverable is a concrete witness, and it
+#             is scheduled from a separate budget so proof lanes cannot crowd
+#             it out. It emits machine-checkable witness blocks, every one of
+#             which is re-evaluated before it can reach the ledger.
+#   BOTH    - eligible for either pool.
+#
+# Refutation lanes are reserved first each iteration (--parallel-refutations).
 strategies:
   - id: exact_frontier_reduction
     name: "Exact frontier reduction"
     rank: 1
+    mode: PROVE
     description: "Attack the current theorem directly; derive exact equations and avoid broader overcounts."
     allowed_tools: [llm, sympy, sage, magma]
     falsification_prompts:
@@ -14,23 +26,72 @@ strategies:
       - "The theorem is proved or reduced to a sharper theorem."
     failure_modes:
       - "The target omits a required constraint."
+
+  - id: boundary_and_degenerate_cases
+    name: "Boundary and degenerate case hunt"
+    rank: 1
+    mode: REFUTE
+    description: >
+      Attack the extremes the sweep reaches last: the largest values in each
+      declared domain, the boundaries of every assumption, and the degenerate
+      cases (zero, one, equal arguments, repeated factors) where a statement
+      quietly stops meaning what it says.
+    allowed_tools: [llm, sympy]
+    counterexample_prompts:
+      - "Which assumption, if dropped by one unit at the boundary, breaks the conclusion?"
+      - "What happens when two variables coincide, or when one divides the other?"
+      - "Is there an unstated coprimality, positivity, or squarefree hypothesis being relied on?"
+      - "Does the statement survive at the largest values of the declared domain?"
+    success_criteria:
+      - "A concrete assignment that survives independent checking."
+      - "Or: the exact property any counterexample must have, stated precisely."
+    failure_modes:
+      - "Proposing a region rather than a point."
+      - "Re-proposing a witness that was already discarded."
+
+  - id: algebraic_coincidence_search
+    name: "Algebraic coincidence search"
+    rank: 2
+    mode: REFUTE
+    description: >
+      Look for witnesses the smallest-first sweep will never reach: values with
+      special factorisation structure, solutions of an auxiliary equation, or
+      points where two terms of the expression collide. This lane exists because
+      an exhaustive sweep of a small box is weak evidence when the counterexample
+      is large by construction -- Fermat's F_5 is the canonical case.
+    allowed_tools: [llm, sympy, sage, magma]
+    counterexample_prompts:
+      - "Solve for the values that make two terms of the expression equal."
+      - "Which n with many small prime factors, or with a large prime factor, stress this claim?"
+      - "Can a counterexample be constructed rather than searched for?"
+      - "If the smallest counterexample is large, what equation does it satisfy?"
+    success_criteria:
+      - "A witness outside the swept region, with the construction that produced it."
+    failure_modes:
+      - "Producing a value too large for the verifier to evaluate exactly."
+
   - id: algebraic_degeneracy_cas
     name: "CAS degeneracy classification"
     rank: 2
+    mode: BOTH
     description: "Use symbolic computation to find square factors, resultants, discriminants, and exceptional components."
     allowed_tools: [sympy, sage, magma]
     falsification_prompts:
       - "Check if the rational functions become squares."
       - "Check pole collapse or denominator-zero families."
+    counterexample_prompts:
+      - "Exhibit a point on each exceptional component."
     proof_prompts:
       - "Prove pairwise non-square outside explicit exceptional loci."
     success_criteria:
       - "All exceptional components are listed."
     failure_modes:
       - "An infinite exceptional family remains uncontrolled."
+
   - id: averaged_second_moment
     name: "Averaged second moment"
     rank: 3
+    mode: PROVE
     description: "Replace individual short-sum targets by the second moment actually needed for energy."
     allowed_tools: [llm, sympy]
     falsification_prompts:
@@ -41,9 +102,29 @@ strategies:
       - "Random-size energy follows."
     failure_modes:
       - "Diagonal or exceptional loci dominate."
+
+  - id: asymptotic_scaling_falsification
+    name: "Asymptotic scaling falsification"
+    rank: 3
+    mode: REFUTE
+    description: >
+      Test whether a claimed bound has the right shape rather than the right
+      constant. A statement that fails only for large parameters is invisible to
+      a bounded sweep, but its failure is often visible in the scaling.
+    allowed_tools: [llm, sympy]
+    counterexample_prompts:
+      - "Does the claimed bound survive taking the parameter to its extreme?"
+      - "Compare growth rates of the two sides: does the inequality reverse, and at roughly what value?"
+      - "Give the smallest parameter at which the reversal is checkable exactly."
+    success_criteria:
+      - "A checkable witness, or the crossover point identified to within an order of magnitude."
+    failure_modes:
+      - "Arguing from asymptotics without ever producing a checkable point."
+
   - id: formalization
     name: "Formalization of algebraic lemmas"
     rank: 4
+    mode: PROVE
     description: "Generate Lean tasks for small algebraic identities."
     allowed_tools: [lean, aristotle]
     falsification_prompts:
@@ -54,13 +135,17 @@ strategies:
       - "Lean verifies the small lemma."
     failure_modes:
       - "Formal task too broad or analytic."
+
   - id: strategy_discovery
     name: "New strategy discovery"
     rank: 99
+    mode: BOTH
     description: "Find genuinely new strategies only after current ones stall."
     allowed_tools: [llm, computation]
     falsification_prompts:
       - "Require a concrete falsification test for any new strategy."
+    counterexample_prompts:
+      - "Propose a new machine-checkable conjecture that you suspect is false."
     proof_prompts:
       - "Propose only strategies with explicit first theorem."
     success_criteria:

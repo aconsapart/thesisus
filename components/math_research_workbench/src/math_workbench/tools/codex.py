@@ -5,7 +5,16 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-VALID_STATUSES = {"PROVED", "CONDITIONAL", "COMPUTATIONAL", "HEURISTIC", "FAILED/OPEN"}
+from math_workbench.tools.migrate import MigrationReport, migrate
+
+# FALSIFIED is a first-class outcome: a claim killed by a checked counterexample
+# is as settled as one that was proved, and the ledger must be able to say so.
+VALID_STATUSES = {"PROVED", "CONDITIONAL", "COMPUTATIONAL", "HEURISTIC", "FAILED/OPEN", "FALSIFIED"}
+
+VALID_CONJECTURE_STATUSES = {"OPEN", "FALSIFIED", "VERIFIED_EXHAUSTIVE", "CONTESTED", "PROVED"}
+VALID_VERIFICATIONS = {"VERIFIED_EXACT", "VERIFIED_SINGLE", "CONTESTED", "REJECTED", "UNCHECKED"}
+VALID_SOURCES = {"AUTO_SEARCH", "LLM_LANE", "MANUAL", "CAS"}
+VALID_SEVERITIES = {"LOW", "MEDIUM", "HIGH", "KILLS_STRATEGY"}
 
 
 def connect(db_path: str) -> sqlite3.Connection:
@@ -16,13 +25,17 @@ def connect(db_path: str) -> sqlite3.Connection:
     return con
 
 
-def init_db(db_path: str, schema_path: str | None = None) -> None:
+def init_db(db_path: str, schema_path: str | None = None) -> MigrationReport:
+    """Create the codex and upgrade a pre-counterexample database in place."""
     con = connect(db_path)
     if schema_path is None:
         schema_path = str(Path(__file__).resolve().parents[3] / "data" / "schema.sql")
     con.executescript(Path(schema_path).read_text(encoding="utf-8"))
     con.commit()
+    report = migrate(con)
+    con.commit()
     con.close()
+    return report
 
 
 def upsert_problem(con: sqlite3.Connection, spec: dict[str, Any]) -> int:
@@ -136,3 +149,245 @@ def insert_computation(con: sqlite3.Connection, problem_id: int, run_id: str, it
     cid = int(cur.fetchone()[0])
     con.commit()
     return cid
+
+
+# --------------------------------------------------------------------------
+# Refutation ledger.
+#
+# The schema has always had a `falsification` table, but before this refactor
+# nothing wrote to it: the dashboard's "Falsifications" tab could only ever be
+# empty. These are the writers that make refutation a recorded outcome rather
+# than a line in a prompt.
+# --------------------------------------------------------------------------
+
+
+def _canonical_witness(assignment: dict[str, Any]) -> str:
+    """Stable JSON so the same witness found twice collapses to one row."""
+    return json.dumps(assignment, sort_keys=True, default=str)
+
+
+def upsert_conjecture(con: sqlite3.Connection, problem_id: int, conjecture: Any) -> int:
+    """Persist a conjecture. Accepts a `Conjecture` object or a plain dict."""
+    get = (lambda k, d=None: getattr(conjecture, k, d)) if not isinstance(conjecture, dict) else conjecture.get
+    slug = str(get("id") or get("slug") or "conjecture")
+    variables = get("variables") or {}
+    variables_json = json.dumps(
+        {name: (dom.describe() if hasattr(dom, "describe") else str(dom)) for name, dom in variables.items()}
+        if isinstance(variables, dict)
+        else str(variables)
+    )
+    space_size = None
+    if hasattr(conjecture, "space_size"):
+        try:
+            space_size = int(conjecture.space_size())
+        except Exception:  # pragma: no cover - defensive: a bad domain must not block logging
+            space_size = None
+    cur = con.execute(
+        """
+        insert into conjecture(problem_id,slug,statement_md,quantifier,predicate,variables_json,
+                               assumptions_json,targets_json,space_size,notes_md)
+        values (?,?,?,?,?,?,?,?,?,?)
+        on conflict(problem_id,slug) do update set
+            statement_md=excluded.statement_md,
+            quantifier=excluded.quantifier,
+            predicate=excluded.predicate,
+            variables_json=excluded.variables_json,
+            assumptions_json=excluded.assumptions_json,
+            targets_json=excluded.targets_json,
+            space_size=excluded.space_size,
+            notes_md=excluded.notes_md,
+            updated_at=current_timestamp
+        returning id
+        """,
+        (
+            problem_id,
+            slug,
+            str(get("statement", slug)),
+            str(get("quantifier", "FORALL")),
+            str(get("predicate", "")),
+            variables_json,
+            json.dumps(list(get("assumptions") or [])),
+            json.dumps(list(get("targets") or [])),
+            space_size,
+            str(get("notes", "")),
+        ),
+    )
+    cjid = int(cur.fetchone()[0])
+    con.commit()
+    return cjid
+
+
+def set_conjecture_status(con: sqlite3.Connection, conjecture_id: int, status: str, notes: str | None = None) -> None:
+    if status not in VALID_CONJECTURE_STATUSES:
+        raise ValueError(f"unknown conjecture status {status!r}; expected one of {sorted(VALID_CONJECTURE_STATUSES)}")
+    con.execute(
+        "update conjecture set status=?, notes_md=coalesce(?, notes_md), updated_at=current_timestamp where id=?",
+        (status, notes, conjecture_id),
+    )
+    con.commit()
+
+
+def insert_falsification(
+    con: sqlite3.Connection,
+    problem_id: int,
+    obstruction: str,
+    *,
+    counterexample_md: str | None = None,
+    severity: str = "MEDIUM",
+    theorem_id: int | None = None,
+    strategy_id: int | None = None,
+    run_id: str | None = None,
+    iteration: int | None = None,
+) -> int:
+    """Record an obstruction: something that blocks a route, with or without a witness."""
+    if severity not in VALID_SEVERITIES:
+        severity = "MEDIUM"
+    cur = con.execute(
+        """
+        insert into falsification(problem_id,theorem_id,strategy_id,run_id,iteration,
+                                  obstruction_md,counterexample_md,severity)
+        values (?,?,?,?,?,?,?,?) returning id
+        """,
+        (problem_id, theorem_id, strategy_id, run_id, iteration, obstruction, counterexample_md, severity),
+    )
+    fid = int(cur.fetchone()[0])
+    con.commit()
+    return fid
+
+
+def insert_counterexample(
+    con: sqlite3.Connection,
+    problem_id: int,
+    conjecture_id: int | None,
+    witness: Any,
+    *,
+    run_id: str | None = None,
+    iteration: int | None = None,
+    theorem_id: int | None = None,
+    strategy_id: int | None = None,
+    falsification_id: int | None = None,
+) -> int:
+    """Store one checked witness.
+
+    `witness` is a `refutation.Witness` (or any object exposing the same
+    fields). The verification verdict is stored verbatim -- callers must not
+    launder a `CONTESTED` or `REJECTED` witness into a refutation.
+    """
+    get = (lambda k, d=None: getattr(witness, k, d)) if not isinstance(witness, dict) else witness.get
+    verification = str(get("verification", "UNCHECKED"))
+    if verification not in VALID_VERIFICATIONS:
+        raise ValueError(f"unknown verification {verification!r}; expected one of {sorted(VALID_VERIFICATIONS)}")
+    source = str(get("source", "AUTO_SEARCH"))
+    if source not in VALID_SOURCES:
+        source = "MANUAL"
+    assignment = get("assignment") or {}
+    witness_json = _canonical_witness({k: str(v) for k, v in assignment.items()})
+    witness_md = ", ".join(f"{k} = {v}" for k, v in sorted(assignment.items())) or "(empty assignment)"
+    cur = con.execute(
+        """
+        insert into counterexample(problem_id,conjecture_id,theorem_id,strategy_id,falsification_id,
+                                   run_id,iteration,source,witness_json,witness_md,verification,
+                                   verifier_notes_md,rationale_md,minimal)
+        values (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        on conflict(conjecture_id,witness_json) do update set
+            verification=excluded.verification,
+            verifier_notes_md=excluded.verifier_notes_md,
+            minimal=max(counterexample.minimal, excluded.minimal)
+        returning id
+        """,
+        (
+            problem_id,
+            conjecture_id,
+            theorem_id,
+            strategy_id,
+            falsification_id,
+            run_id,
+            iteration,
+            source,
+            witness_json,
+            witness_md,
+            verification,
+            str(get("detail", "")),
+            str(get("rationale", "")),
+            1 if get("minimal", False) else 0,
+        ),
+    )
+    xid = int(cur.fetchone()[0])
+    con.commit()
+    return xid
+
+
+def record_search_outcome(
+    con: sqlite3.Connection,
+    problem_id: int,
+    conjecture: Any,
+    outcome: Any,
+    *,
+    run_id: str | None = None,
+    iteration: int | None = None,
+    strategy_id: int | None = None,
+) -> dict[str, Any]:
+    """Persist a whole search: the conjecture, its status, and every witness.
+
+    Returns the ids written, so a caller can link a theorem to the witness that
+    killed it.
+    """
+    conjecture_id = upsert_conjecture(con, problem_id, conjecture)
+    status = str(getattr(outcome, "status", "OPEN"))
+    notes = str(getattr(outcome, "notes", "")) or None
+    set_conjecture_status(con, conjecture_id, status, notes)
+
+    written: list[int] = []
+    witnesses = list(getattr(outcome, "witnesses", [])) + list(getattr(outcome, "contested", []))
+    for witness in witnesses:
+        written.append(
+            insert_counterexample(
+                con,
+                problem_id,
+                conjecture_id,
+                witness,
+                run_id=run_id,
+                iteration=iteration,
+                strategy_id=strategy_id,
+            )
+        )
+
+    falsification_id = None
+    verified = [w for w in getattr(outcome, "witnesses", []) if getattr(w, "refutes", lambda: False)()]
+    if verified:
+        first = verified[0]
+        falsification_id = insert_falsification(
+            con,
+            problem_id,
+            obstruction=f"Conjecture {getattr(conjecture, 'id', '?')} is false: "
+            f"{getattr(outcome, 'statement', '')}",
+            counterexample_md=first.describe() if hasattr(first, "describe") else str(first),
+            severity="KILLS_STRATEGY" if any(w.verification == "VERIFIED_EXACT" for w in verified) else "HIGH",
+            strategy_id=strategy_id,
+            run_id=run_id,
+            iteration=iteration,
+        )
+    return {
+        "conjecture_id": conjecture_id,
+        "counterexample_ids": written,
+        "falsification_id": falsification_id,
+        "status": status,
+    }
+
+
+def verified_counterexamples(con: sqlite3.Connection, problem_id: int | None = None) -> list[dict[str, Any]]:
+    """Witnesses that survived independent checking, newest first."""
+    sql = "select * from v_verified_counterexamples"
+    params: tuple[Any, ...] = ()
+    if problem_id is not None:
+        sql = (
+            "select c.id, c.witness_md, c.verification, c.source, c.minimal, c.iteration, c.created_at, "
+            "cj.slug as conjecture from counterexample c "
+            "left join conjecture cj on cj.id=c.conjecture_id "
+            "where c.problem_id=? and c.verification in ('VERIFIED_EXACT','VERIFIED_SINGLE') "
+            "order by c.created_at desc"
+        )
+        params = (problem_id,)
+    cur = con.execute(sql, params)
+    columns = [d[0] for d in cur.description]
+    return [dict(zip(columns, row)) for row in cur.fetchall()]

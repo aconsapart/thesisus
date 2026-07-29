@@ -12,6 +12,36 @@ targets:
     title: "Main asymptotic bound"
     statement: "Prove S(X) << X (log X)^C for the configured sequence."
     status: FAILED/OPEN
+
+# `targets` are what you try to prove; `conjectures` are what you try to break.
+# A conjecture is a universally quantified claim with a machine-checkable
+# predicate over declared variable domains, so the counterexample sweep can act
+# on it without a model in the loop. Replace the placeholder below with the
+# sharpest claim your proof actually depends on -- if it has a counterexample,
+# you want to find it before spending a proof budget on it.
+#
+# Domain kinds: integers (low/high/step), primes (low/high), values (explicit
+# list), rationals (low/high/max_denominator).
+# Predicate vocabulary: the arithmetic operators, plus abs, min, max, gcd, lcm,
+# floor, ceiling, sqrt, factorial, binomial, is_prime, divisor_count,
+# divisor_sigma, totient, mobius, prime, primepi, log, exp.
+#
+# See examples/counterexample_demo_problem.yaml for worked conjectures whose
+# true status is already known.
+conjectures:
+  - id: placeholder-nondegeneracy
+    statement: "The structured family is non-degenerate: no two distinct parameters collide."
+    predicate: "(a*a + b) % 7 != 0"
+    assumptions:
+      - "gcd(a, b) == 1"
+    variables:
+      a: {kind: integers, low: 1, high: 30}
+      b: {kind: integers, low: 1, high: 30}
+    notes: |
+      Placeholder. This one is false and the sweep will say so immediately,
+      which is the point: confirm the machinery reports a witness before you
+      trust it on a claim whose answer you do not already know.
+
 known_results:
   - status: HEURISTIC
     statement: "The sequence appears pseudorandom in computations."

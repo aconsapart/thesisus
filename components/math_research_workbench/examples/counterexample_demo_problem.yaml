@@ -1,0 +1,129 @@
+slug: counterexample-demo
+title: "Counterexample search demo: which arithmetic claims survive a sweep?"
+domain: number_theory
+background: |
+  A worked example of the refutation track, using claims whose status is already
+  known to mathematics. Three of the conjectures below are false and the sweep
+  finds explicit witnesses; two are true and the sweep exhausts their declared
+  space without finding one.
+
+  It exists to make the distinction concrete: FALSIFIED means a witness was
+  found and independently checked, VERIFIED_EXHAUSTIVE means no witness exists
+  anywhere in the declared space. Neither is the same as FAILED/OPEN, which is
+  what you get when the search runs out of budget having settled nothing.
+
+  Run it with no model and no API key:
+
+      python scripts/run_agent.py --problem examples/counterexample_demo_problem.yaml --sweep-only
+
+definitions:
+  - name: "Fermat number"
+    statement: "F_k = 2^(2^k) + 1."
+  - name: "Mersenne number"
+    statement: "M_p = 2^p - 1."
+  - name: "Divisor counting function"
+    statement: "d(n) is the number of positive divisors of n."
+  - name: "Euler totient"
+    statement: "phi(n) counts the integers in [1, n] coprime to n."
+
+targets:
+  - id: sweep-demo
+    title: "Demonstrate the refutation track"
+    statement: "Show that the workbench distinguishes falsified, exhaustively verified, and open claims."
+    status: FAILED/OPEN
+
+# Each conjecture is asserted to hold for every assignment in its declared space
+# that satisfies its assumptions. The searcher enumerates smallest-first, so a
+# reported witness is the smallest one in search order.
+conjectures:
+  - id: euler-prime-polynomial
+    statement: "n^2 + n + 41 is prime for every non-negative integer n."
+    predicate: "is_prime(n*n + n + 41)"
+    variables:
+      n: {kind: integers, low: 0, high: 60}
+    notes: |
+      Euler's polynomial. Prime for n = 0..39, which is exactly long enough to
+      look like a theorem if you only test a few values. The sweep enumerates
+      from zero, so the witness it reports is the first failure.
+
+  - id: fermat-primes
+    statement: "Every Fermat number 2^(2^k) + 1 is prime."
+    predicate: "is_prime(2**(2**k) + 1)"
+    variables:
+      k: {kind: integers, low: 0, high: 6}
+    notes: |
+      Fermat's conjecture, refuted by Euler in 1732: F_5 = 4294967297 = 641 * 6700417.
+      True for k = 0..4, so a sweep with an upper bound of 4 would report
+      VERIFIED_EXHAUSTIVE -- correctly, and uselessly. The declared space is the
+      claim you are actually testing.
+
+  - id: mersenne-prime-exponent
+    statement: "2^p - 1 is prime whenever p is prime."
+    predicate: "is_prime(2**p - 1)"
+    variables:
+      p: {kind: primes, low: 2, high: 40}
+    notes: "False at p = 11: 2047 = 23 * 89."
+
+  - id: divisor-count-multiplicative
+    statement: "d(mn) = d(m) d(n) for all positive integers m and n."
+    predicate: "divisor_count(m*n) == divisor_count(m)*divisor_count(n)"
+    variables:
+      m: {kind: integers, low: 1, high: 40}
+      n: {kind: integers, low: 1, high: 40}
+    notes: |
+      False: d is multiplicative only on coprime arguments. The smallest witness
+      is m = n = 2. Note this is a two-variable search -- diagonal enumeration
+      reaches it immediately, whereas exhausting m before touching n would not.
+
+  - id: divisor-count-multiplicative-coprime
+    statement: "d(mn) = d(m) d(n) whenever gcd(m, n) = 1."
+    predicate: "divisor_count(m*n) == divisor_count(m)*divisor_count(n)"
+    assumptions:
+      - "gcd(m, n) == 1"
+    variables:
+      m: {kind: integers, low: 1, high: 40}
+      n: {kind: integers, low: 1, high: 40}
+    notes: |
+      The repaired version of the previous conjecture, and the shape a good
+      repair takes: the added hypothesis excludes an infinite family rather than
+      the single witness that killed the original.
+
+  - id: totient-even
+    statement: "phi(n) is even for every n > 2."
+    predicate: "totient(n) % 2 == 0"
+    assumptions:
+      - "n > 2"
+    variables:
+      n: {kind: integers, low: 1, high: 500}
+    notes: |
+      True. The sweep exhausts the space and reports VERIFIED_EXHAUSTIVE, which
+      is evidence over [3, 500] and not a proof of the general statement.
+
+known_results:
+  - status: PROVED
+    statement: "d is multiplicative on coprime arguments."
+  - status: PROVED
+    statement: "phi(n) is even for n > 2, since the units mod n pair off under x -> -x."
+
+current_frontier: |
+  Establish, for each declared conjecture, whether it is falsified by an explicit
+  verified witness or holds throughout its declared search space.
+
+falsification_tests:
+  - "Sweep every declared conjecture smallest-first."
+  - "Re-check each witness with both the rational and the symbolic evaluator."
+  - "Discard any witness the two evaluators disagree about, and report the disagreement."
+
+computation_tasks:
+  - "Report the size of each search space alongside the number of points evaluated."
+
+formalization_targets:
+  - "Formalize the multiplicativity of d on coprime arguments in Lean."
+
+# Machine-side limits. The problem says what to search; this says how much of the
+# machine it may spend. Falls back to `search:` in config/local_settings.yaml.
+refutation:
+  max_evaluations: 4000
+  random_samples: 200
+  time_limit_s: 20.0
+  max_witnesses: 3

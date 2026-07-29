@@ -3,7 +3,16 @@
 This combined artifact packages the modular pieces built during the proof-search workflow.
 
 ## `components/math_research_workbench`
-Problem-agnostic LangGraph/LangChain proof-search workbench. Supports configurable problem specs, strategy portfolios, local settings, SQLite logging, symbolic checks, CAS hooks, and formalization hooks.
+Problem-agnostic LangGraph/LangChain workbench that works two tracks at once: proving statements and refuting them. Supports configurable problem specs, executable conjectures with an automated counterexample search, independent double-checking of every witness, strategy portfolios with `PROVE`/`REFUTE` lanes, local settings, SQLite logging, symbolic checks, CAS hooks, and formalization hooks.
+
+The counterexample sweep runs standalone with no model and no API key:
+
+```bash
+cd components/math_research_workbench
+python -m math_workbench.sweep --problem examples/counterexample_demo_problem.yaml
+```
+
+See `components/math_research_workbench/docs/ARCHITECTURE.md` for the graph and the verification discipline.
 
 ## `components/theorem_codex`
 SQLite + Datasette + Streamlit theorem codex. Use this as the canonical theorem/claim/attempt/falsification ledger and UI.

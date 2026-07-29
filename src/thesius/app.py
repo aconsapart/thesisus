@@ -341,6 +341,7 @@ def run_workbench_cmd(
     strategies: str = typer.Option("components/math_research_workbench/examples/generic_strategy_portfolio.yaml"),
     iterations: int = typer.Option(3),
     parallel_strategies: int = typer.Option(3),
+    parallel_refutations: int = typer.Option(1, help="Refutation lanes reserved per iteration."),
     out: str = typer.Option("runs/workbench_example"),
     db: Optional[str] = typer.Option(None, "--db", help="SQLite database path. Overrides configured database.path."),
 ):
@@ -356,11 +357,46 @@ def run_workbench_cmd(
         "--strategies", strategies,
         "--iterations", str(iterations),
         "--parallel-strategies", str(parallel_strategies),
+        "--parallel-refutations", str(parallel_refutations),
         "--out", out,
         "--db", db_path,
     ]
     console.print("[bold]Running:[/bold] " + " ".join(shlex.quote(c) for c in cmd))
     subprocess.run(cmd, check=False)
+
+
+@run_app.command("sweep")
+def run_sweep_cmd(
+    problem: str = typer.Option("components/math_research_workbench/examples/counterexample_demo_problem.yaml"),
+    out: Optional[str] = typer.Option(None, help="Write the markdown report here."),
+    db: Optional[str] = typer.Option(None, "--db", help="Persist results to this codex. Omit to only print."),
+    max_evaluations: Optional[int] = typer.Option(None),
+    time_limit: Optional[float] = typer.Option(None),
+):
+    """Search a problem's conjectures for counterexamples.
+
+    Deterministic and free: no model call, no API key. Worth running before
+    committing to a proof campaign. Exit code 1 means a conjecture was
+    falsified, which is a successful run of this command. Exit code 2 means the
+    two independent evaluators disagreed somewhere and the run is not
+    trustworthy until that is fixed.
+    """
+    script = Path("components/math_research_workbench/scripts/sweep.py")
+    if not script.exists():
+        console.print("[red]Workbench sweep.py not found.[/red]")
+        raise typer.Exit(1)
+    cmd = [sys.executable, str(script), "--problem", problem]
+    if db is not None:
+        cmd += ["--db", _db_path(db)]
+    if out:
+        cmd += ["--out", out]
+    if max_evaluations is not None:
+        cmd += ["--max-evaluations", str(max_evaluations)]
+    if time_limit is not None:
+        cmd += ["--time-limit", str(time_limit)]
+    console.print("[bold]Running:[/bold] " + " ".join(shlex.quote(c) for c in cmd))
+    result = subprocess.run(cmd, check=False)
+    raise typer.Exit(result.returncode)
 
 
 @app.command("tui")
