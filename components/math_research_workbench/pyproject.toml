@@ -26,6 +26,7 @@ test = [
 
 [project.scripts]
 math-workbench-sweep = "math_workbench.sweep:main"
+math-workbench-recon = "math_workbench.recon:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -375,6 +375,216 @@ def record_search_outcome(
     }
 
 
+# --------------------------------------------------------------------------
+# Prior-art ledger.
+#
+# The third way a claim dies: not false, not unproved, just already published.
+# Kept alongside the other two so the claims board and the conjecture board sit
+# in the same database and can be read together.
+# --------------------------------------------------------------------------
+
+VALID_CLAIM_STATUSES = {"KILLED", "WOUNDED", "CLEAR", "UNDER_SEARCHED"}
+VALID_THREAT_VERDICTS = {"KILLS", "WOUNDS", "ADJACENT", "BACKGROUND"}
+
+
+def upsert_claim(con: sqlite3.Connection, problem_id: int, claim: Any) -> int:
+    """Persist a declared claim before anything has been searched for it."""
+    get = (lambda k, d=None: getattr(claim, k, d)) if not isinstance(claim, dict) else claim.get
+    slug = str(get("id") or get("slug") or "claim")
+    cur = con.execute(
+        """
+        insert into claim_contribution(problem_id,slug,statement_md,kind,novelty_basis_md)
+        values (?,?,?,?,?)
+        on conflict(problem_id,slug) do update set
+            statement_md=excluded.statement_md,
+            kind=excluded.kind,
+            novelty_basis_md=excluded.novelty_basis_md,
+            updated_at=current_timestamp
+        returning id
+        """,
+        (
+            problem_id,
+            slug,
+            str(get("statement", slug)),
+            str(get("kind", "CONTRIBUTION")),
+            str(get("novelty_basis", "")),
+        ),
+    )
+    cid = int(cur.fetchone()[0])
+    con.commit()
+    return cid
+
+
+def insert_search_pass(
+    con: sqlite3.Connection,
+    problem_id: int,
+    search_pass: Any,
+    *,
+    run_id: str | None = None,
+    iteration: int | None = None,
+) -> int:
+    """Record one sweep and its full query log, negatives included."""
+    get = (lambda k, d=None: getattr(search_pass, k, d)) if not isinstance(search_pass, dict) else search_pass.get
+    slug = str(get("id") or "pass")
+    cur = con.execute(
+        """
+        insert into prior_art_pass(problem_id,run_id,iteration,slug,phrasing,engine,notes_md)
+        values (?,?,?,?,?,?,?)
+        on conflict(problem_id,run_id,slug) do update set
+            phrasing=excluded.phrasing,
+            engine=excluded.engine,
+            notes_md=excluded.notes_md
+        returning id
+        """,
+        (
+            problem_id,
+            run_id,
+            iteration,
+            slug,
+            str(get("phrasing", "")),
+            str(get("engine", "")),
+            str(get("notes", "")),
+        ),
+    )
+    pass_id = int(cur.fetchone()[0])
+    con.execute("delete from prior_art_query where pass_id=?", (pass_id,))
+    for query in get("queries", []) or []:
+        qget = (lambda k, d=None: getattr(query, k, d)) if not isinstance(query, dict) else query.get
+        con.execute(
+            """
+            insert into prior_art_query(pass_id,problem_id,query_text,angle,engine,results,notes_md)
+            values (?,?,?,?,?,?,?)
+            """,
+            (
+                pass_id,
+                problem_id,
+                str(qget("text", "")),
+                str(qget("angle", "")),
+                str(qget("engine", "")),
+                int(qget("results", 0) or 0),
+                str(qget("notes", "")),
+            ),
+        )
+    con.commit()
+    return pass_id
+
+
+def insert_threat(
+    con: sqlite3.Connection,
+    problem_id: int,
+    claim_id: int | None,
+    threat: Any,
+    *,
+    pass_id: int | None = None,
+) -> int:
+    get = (lambda k, d=None: getattr(threat, k, d)) if not isinstance(threat, dict) else threat.get
+    verdict = str(get("verdict", "BACKGROUND")).upper()
+    if verdict not in VALID_THREAT_VERDICTS:
+        raise ValueError(f"unknown threat verdict {verdict!r}; expected one of {sorted(VALID_THREAT_VERDICTS)}")
+    cur = con.execute(
+        """
+        insert into prior_art_threat(problem_id,claim_id,pass_id,verdict,source,locator,angle,evidence_md)
+        values (?,?,?,?,?,?,?,?)
+        on conflict(claim_id,source,locator) do update set
+            verdict=excluded.verdict,
+            angle=excluded.angle,
+            evidence_md=excluded.evidence_md
+        returning id
+        """,
+        (
+            problem_id,
+            claim_id,
+            pass_id,
+            verdict,
+            str(get("source", "")),
+            str(get("locator", "")),
+            str(get("angle", "")),
+            str(get("evidence", "")),
+        ),
+    )
+    tid = int(cur.fetchone()[0])
+    con.commit()
+    return tid
+
+
+def record_claim_assessment(
+    con: sqlite3.Connection,
+    problem_id: int,
+    assessment: Any,
+    *,
+    pass_ids: dict[str, int] | None = None,
+) -> int:
+    """Persist a claim's verdict and every threat aimed at it."""
+    get = (lambda k, d=None: getattr(assessment, k, d)) if not isinstance(assessment, dict) else assessment.get
+    status = str(get("status", "UNDER_SEARCHED"))
+    if status not in VALID_CLAIM_STATUSES:
+        raise ValueError(f"unknown claim status {status!r}; expected one of {sorted(VALID_CLAIM_STATUSES)}")
+
+    slug = str(get("claim_id", "claim"))
+    claim_id = upsert_claim(
+        con, problem_id, {"id": slug, "statement": str(get("statement", slug))}
+    )
+    # `unearned_overclaims` is a method on ClaimAssessment and a plain list in
+    # the dict form, so handle both rather than silently storing nothing.
+    raw_overclaims = get("unearned_overclaims", []) or []
+    if callable(raw_overclaims):
+        raw_overclaims = raw_overclaims()
+    overclaims = [str(o) for o in raw_overclaims]
+    con.execute(
+        """
+        update claim_contribution set
+            status=?,
+            passes_searched=?,
+            angles_covered_json=?,
+            missing_angles_json=?,
+            negative_queries=?,
+            reasons_md=?,
+            overclaims_json=?,
+            surgery_required=?,
+            updated_at=current_timestamp
+        where id=?
+        """,
+        (
+            status,
+            int(get("passes_searched", 0) or 0),
+            json.dumps(sorted(get("angles_covered", set()) or [])),
+            json.dumps(sorted(get("missing_angles", set()) or [])),
+            int(get("negative_queries", 0) or 0),
+            "\n".join(get("reasons", []) or []),
+            json.dumps(overclaims),
+            1 if get("surgery_required", False) else 0,
+            claim_id,
+        ),
+    )
+    for threat in get("threats", []) or []:
+        tget = (lambda k, d=None: getattr(threat, k, d)) if not isinstance(threat, dict) else threat.get
+        insert_threat(
+            con,
+            problem_id,
+            claim_id,
+            threat,
+            pass_id=(pass_ids or {}).get(str(tget("pass_id", ""))),
+        )
+    con.commit()
+    return claim_id
+
+
+def claims_blocking_publication(con: sqlite3.Connection, problem_id: int | None = None) -> list[dict[str, Any]]:
+    """Claims that cannot be stated as written, newest first."""
+    sql = (
+        "select slug, status, statement_md, reasons_md, surgery_required "
+        "from claim_contribution where status in ('KILLED','WOUNDED') or surgery_required=1"
+    )
+    params: tuple[Any, ...] = ()
+    if problem_id is not None:
+        sql += " and problem_id=?"
+        params = (problem_id,)
+    sql += " order by updated_at desc"
+    cur = con.execute(sql, params)
+    columns = [d[0] for d in cur.description]
+    return [dict(zip(columns, row)) for row in cur.fetchall()]
+
+
 def verified_counterexamples(con: sqlite3.Connection, problem_id: int | None = None) -> list[dict[str, Any]]:
     """Witnesses that survived independent checking, newest first."""
     sql = "select * from v_verified_counterexamples"

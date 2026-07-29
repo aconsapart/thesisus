@@ -365,6 +365,50 @@ def run_workbench_cmd(
     subprocess.run(cmd, check=False)
 
 
+@run_app.command("recon")
+def run_recon_cmd(
+    problem: str = typer.Option("components/math_research_workbench/examples/counterexample_demo_problem.yaml"),
+    emit_prompts: bool = typer.Option(False, "--emit-prompts", help="Print the hostile-search prompts and exit."),
+    ingest: Optional[list[str]] = typer.Option(None, "--ingest", help="Search-pass response files to grade."),
+    prompt_dir: Optional[str] = typer.Option(None, help="Also write emitted prompts here."),
+    out: Optional[str] = typer.Option(None, help="Write the threat-table report here."),
+    claims_out: Optional[str] = typer.Option(None, help="Write the defensible claim set here."),
+    db: Optional[str] = typer.Option(None, "--db", help="Persist the threat table to this codex."),
+):
+    """Hostile prior-art recon: has someone already published this?
+
+    Day-zero work. The cheapest way for a claim to die is for it to already
+    exist, so this runs before any proof or refutation budget is committed.
+
+    Exit code 1 means a claim was killed or wounded (the search did its job).
+    Exit code 2 means a claim is under-searched: nothing was found, but not
+    thoroughly enough to say so.
+    """
+    script = Path("components/math_research_workbench/scripts/recon.py")
+    if not script.exists():
+        console.print("[red]Workbench recon.py not found.[/red]")
+        raise typer.Exit(1)
+    cmd = [sys.executable, str(script), "--problem", problem]
+    if emit_prompts:
+        cmd.append("--emit-prompts")
+        if prompt_dir:
+            cmd += ["--prompt-dir", prompt_dir]
+    elif ingest:
+        cmd += ["--ingest", *ingest]
+        if db is not None:
+            cmd += ["--db", _db_path(db)]
+        if out:
+            cmd += ["--out", out]
+        if claims_out:
+            cmd += ["--claims-out", claims_out]
+    else:
+        console.print("[red]Give either --emit-prompts or --ingest.[/red]")
+        raise typer.Exit(1)
+    console.print("[bold]Running:[/bold] " + " ".join(shlex.quote(c) for c in cmd))
+    result = subprocess.run(cmd, check=False)
+    raise typer.Exit(result.returncode)
+
+
 @run_app.command("sweep")
 def run_sweep_cmd(
     problem: str = typer.Option("components/math_research_workbench/examples/counterexample_demo_problem.yaml"),

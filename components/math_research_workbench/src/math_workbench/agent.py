@@ -14,6 +14,7 @@ from langgraph.graph import END, START, StateGraph
 
 from .conjecture import Conjecture, ConjectureError, load_conjectures
 from .config import ProblemSpec, StrategyPortfolio, load_app_config
+from .prior_art import ANGLES, PriorArtPolicy, SearchPass, load_claims
 from .prompts import (
     SYSTEM_PROMPT,
     SELECT_STRATEGIES_TEMPLATE,
@@ -24,7 +25,12 @@ from .prompts import (
     DISCOVERY_TEMPLATE,
     FORMAL_TASK_TEMPLATE,
     WITNESS_FORMAT,
+    ANGLE_GUIDANCE,
+    CLAIM_SURGERY_TEMPLATE,
+    HOSTILE_SEARCH_TEMPLATE,
+    RECON_BLOCK_FORMAT,
 )
+from .recon import claims_summary
 from .state import WorkbenchState
 from .tools.cas import symbolic_core_checks, cas_pairwise_degeneracy
 from .tools.codex import (
@@ -37,8 +43,17 @@ from .tools.codex import (
     insert_theorem,
     insert_counterexample,
     insert_falsification,
+    insert_search_pass,
+    record_claim_assessment,
     record_search_outcome,
+    upsert_claim,
     upsert_conjecture,
+)
+from .tools.recon import (
+    merge_passes,
+    parse_search_pass,
+    render_claims_file,
+    render_report as render_prior_art_report,
 )
 from .tools.formalization import run_local_lean, run_aristotle_cli
 from .tools.refutation import (
@@ -101,6 +116,145 @@ def write_iter_file(state: WorkbenchState, name: str, text: str) -> str:
     p = d / name
     p.write_text(text, encoding="utf-8")
     return str(p)
+
+
+def node_prior_art(state: WorkbenchState) -> dict[str, Any]:
+    """Day-zero recon: has someone already published this?
+
+    Runs once, before any strategy is selected, because the cheapest way for a
+    claim to die is for it to already exist. One hostile pass per search angle,
+    each in its own model call with its own vocabulary -- a single "search
+    thoroughly" request collapses into one phrasing and one literature, which is
+    the failure this is designed to prevent.
+    """
+    if state.get("prior_art_done"):
+        return {}
+
+    claims = load_claims(state["problem"].get("claims", []) or [])
+    if not claims:
+        return {
+            "prior_art_done": True,
+            "prior_art_report": (
+                "# Prior-art threat table\n\n"
+                "No `claims:` block was declared for this problem, so no prior-art "
+                "recon ran. Nothing here says the work is novel -- only that novelty "
+                "was never checked.\n"
+            ),
+        }
+
+    policy = PriorArtPolicy.from_dict(state["problem"].get("prior_art", {}))
+    angles = list(ANGLES)[: max(policy.min_passes, state.get("parallel_searches", 2))]
+    summary = problem_summary(state["problem"])
+    conceded = (
+        "\n".join(f"- {c.id}: {art}" for c in claims for art in c.known_prior_art)
+        or "(none conceded -- which is itself suspicious)"
+    )
+
+    con = connect(state["db_path"])
+    problem_id = upsert_problem(con, state["problem"])
+    for claim in claims:
+        upsert_claim(con, problem_id, claim)
+
+    passes: list[SearchPass] = []
+    problems: list[str] = []
+    previous = ""
+    for angle in angles:
+        prompt = HOSTILE_SEARCH_TEMPLATE.format(
+            problem_summary=summary,
+            claims=claims_summary(claims),
+            conceded=conceded,
+            previous_findings=previous or "(this is the first pass; nothing found yet)",
+            angle=angle,
+            angle_guidance=ANGLE_GUIDANCE.get(angle, ""),
+            phrasing=f"pass `{angle.lower()}`; use vocabulary you have not used in an earlier pass",
+            block_format=RECON_BLOCK_FORMAT,
+        )
+        result = llm_call(prompt)
+        write_iter_file(state, f"prior_art_{angle.lower()}.md", result)
+        sweep, issues = parse_search_pass(result, claims, pass_id=angle.lower(), phrasing=angle.lower())
+        passes.append(sweep)
+        problems.extend(f"{angle}: {issue}" for issue in issues)
+        if sweep.threats:
+            # Later passes see earlier findings so they do not re-report them and
+            # can push past what is already known.
+            previous = "Already found by earlier passes (do not simply repeat these):\n" + "\n".join(
+                f"- {t.claim_id}: {t.describe()}" for t in sweep.threats
+            )
+
+    assessments = merge_passes(claims, passes, policy)
+
+    pass_ids = {
+        sweep.id: insert_search_pass(con, problem_id, sweep, run_id=state["run_id"], iteration=0)
+        for sweep in passes
+    }
+    for assessment in assessments:
+        record_claim_assessment(con, problem_id, assessment, pass_ids=pass_ids)
+    con.close()
+
+    report = render_prior_art_report(assessments, passes, problems)
+    claims_file = render_claims_file(assessments)
+    write_iter_file(state, "prior_art_threat_table.md", report)
+    Path(state["out_dir"], "CLAIMS.md").write_text(claims_file, encoding="utf-8")
+
+    blocked = [a.claim_id for a in assessments if a.blocks_publication()]
+    return {
+        "claims": [{"id": c.id, "statement": c.statement} for c in claims],
+        "prior_art_passes": [p.as_dict() for p in passes],
+        "prior_art_assessments": [a.as_dict() for a in assessments],
+        "prior_art_report": report,
+        "claims_file": claims_file,
+        "claims_blocked": blocked,
+        "prior_art_done": True,
+    }
+
+
+def node_claim_surgery(state: WorkbenchState) -> dict[str, Any]:
+    """Narrow the claims the literature damaged, or drop them.
+
+    A killed claim is not a disaster; it is a discovery about what is left. The
+    output is the claim you could defend with the citation on the table.
+    """
+    assessments = state.get("prior_art_assessments", [])
+    damaged = [a for a in assessments if a.get("surgery_required")]
+    if not damaged:
+        return {}
+
+    damaged_text = "\n".join(
+        f"- {a['claim_id']} [{a['status']}]: {a['statement']}\n"
+        + "\n".join(f"    {r}" for r in a.get("reasons", []))
+        for a in damaged
+    )
+    prompt = CLAIM_SURGERY_TEMPLATE.format(
+        problem_summary=problem_summary(state["problem"]),
+        damaged_claims=damaged_text,
+        threat_table=state.get("prior_art_report", "")[:10000],
+    )
+    result = llm_call(prompt)
+    write_iter_file(state, "claim_surgery.md", result)
+
+    con = connect(state["db_path"])
+    problem_id = upsert_problem(con, state["problem"])
+    for a in damaged:
+        insert_falsification(
+            con,
+            problem_id,
+            obstruction=f"Prior art damages claim {a['claim_id']}: " + "; ".join(a.get("reasons", [])),
+            severity="KILLS_STRATEGY" if a["status"] == "KILLED" else "HIGH",
+            run_id=state["run_id"],
+            iteration=state["iteration"],
+        )
+    con.close()
+
+    surgery_note = "\n\n## Claim surgery\n\n" + result
+    Path(state["out_dir"], "CLAIMS.md").write_text(
+        state.get("claims_file", "") + surgery_note, encoding="utf-8"
+    )
+    return {"claim_surgery_report": result, "claims_file": state.get("claims_file", "") + surgery_note}
+
+
+def route_after_prior_art(state: WorkbenchState) -> Literal["surgery", "proceed"]:
+    """Damaged claims get narrowed before any budget is spent defending them."""
+    return "surgery" if state.get("claims_blocked") else "proceed"
 
 
 def build_conjectures(state: WorkbenchState) -> tuple[list[Conjecture], list[str]]:
@@ -652,9 +806,12 @@ def node_increment(state: WorkbenchState) -> dict[str, Any]:
 
 
 def build_graph():
-    """Refutation runs before proof, and can divert the iteration.
+    """Three ways a claim can die, cheapest first.
 
-        select_strategies
+        prior_art                        (day zero: is it already published?)
+          |-- claims damaged --> claim_surgery --.
+          `-- claims clear ---------------------_/
+          -> select_strategies
           -> search_counterexamples      (deterministic sweep, no model)
           -> refute_lanes                (model-proposed witnesses, each checked)
           -> assess_refutation
@@ -665,9 +822,14 @@ def build_graph():
                                           -> formalization ---> synthesize
           -> discover -> repeat
 
-    The old graph ran proof lanes first and had no refutation stage at all.
+    Ordered by cost to discover: prior art is a search, refutation is a sweep,
+    proof is a campaign. The old graph ran proof lanes first and had neither of
+    the other two stages. `prior_art` runs once and short-circuits on later
+    iterations.
     """
     g = StateGraph(WorkbenchState)
+    g.add_node("prior_art", node_prior_art)
+    g.add_node("claim_surgery", node_claim_surgery)
     g.add_node("select_strategies", node_select_strategies)
     g.add_node("search_counterexamples", node_search_counterexamples)
     g.add_node("refute_lanes", node_refute_lanes)
@@ -681,7 +843,11 @@ def build_graph():
     g.add_node("discover", node_discover)
     g.add_node("increment", node_increment)
 
-    g.add_edge(START, "select_strategies")
+    g.add_edge(START, "prior_art")
+    g.add_conditional_edges(
+        "prior_art", route_after_prior_art, {"surgery": "claim_surgery", "proceed": "select_strategies"}
+    )
+    g.add_edge("claim_surgery", "select_strategies")
     g.add_edge("select_strategies", "search_counterexamples")
     g.add_edge("search_counterexamples", "refute_lanes")
     g.add_edge("refute_lanes", "assess_refutation")
@@ -709,6 +875,7 @@ def initial_state(
     iterations: int,
     parallel_strategies: int,
     parallel_refutations: int,
+    parallel_searches: int = 2,
 ) -> WorkbenchState:
     """The starting state, split out so tests can build one without a model."""
     return {
@@ -750,6 +917,15 @@ def initial_state(
         "repair_report": "",
         "frontier_falsified": False,
         "resolution": "OPEN",
+        "parallel_searches": parallel_searches,
+        "claims": [],
+        "prior_art_passes": [],
+        "prior_art_assessments": [],
+        "prior_art_report": "",
+        "claims_file": "",
+        "claim_surgery_report": "",
+        "claims_blocked": [],
+        "prior_art_done": False,
     }
 
 
@@ -761,6 +937,7 @@ def run(
     out: str,
     db: str,
     parallel_refutations: int = 1,
+    parallel_searches: int = 2,
 ) -> dict[str, Any]:
     problem = ProblemSpec.from_yaml(problem_path)
     portfolio = StrategyPortfolio.from_yaml(strategies_path)
@@ -769,9 +946,11 @@ def run(
     if not report.already_current:
         print(f"[codex] {report.summary()}")
 
-    # Fail before spending a model call: a conjecture with a bad predicate should
-    # be a startup error, not a surprise three iterations in.
+    # Fail before spending a model call: a conjecture with a bad predicate, or a
+    # claim with no statement, should be a startup error rather than a surprise
+    # three iterations in.
     conjectures = load_conjectures(problem.conjectures)
+    claims = load_claims(problem.claims)
 
     con = connect(db)
     problem_id = upsert_problem(con, problem.__dict__)
@@ -779,6 +958,8 @@ def run(
         upsert_strategy(con, s.__dict__)
     for c in conjectures:
         upsert_conjecture(con, problem_id, c)
+    for claim in claims:
+        upsert_claim(con, problem_id, claim)
     con.close()
 
     state = initial_state(
@@ -790,6 +971,7 @@ def run(
         iterations=iterations,
         parallel_strategies=parallel_strategies,
         parallel_refutations=parallel_refutations,
+        parallel_searches=parallel_searches,
     )
     app = build_graph()
     final = app.invoke(state, config={"configurable": {"thread_id": state["run_id"]}})
@@ -809,6 +991,13 @@ def main() -> None:
         default=1,
         help="Refutation lanes reserved per iteration. Set 0 to disable the model-driven "
         "refutation lanes; the deterministic sweep still runs.",
+    )
+    parser.add_argument(
+        "--parallel-searches",
+        type=int,
+        default=2,
+        help="Hostile prior-art search passes, one per angle. Below the policy minimum "
+        "(default 2) every clear verdict comes back UNDER_SEARCHED.",
     )
     parser.add_argument("--out", default="runs/run")
     parser.add_argument("--db", default="proof_codex.sqlite")
@@ -837,6 +1026,7 @@ def main() -> None:
         args.out,
         args.db,
         parallel_refutations=args.parallel_refutations,
+        parallel_searches=args.parallel_searches,
     )
     print(final.get("synthesis", ""))
 

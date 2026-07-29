@@ -132,12 +132,14 @@ class ProblemSpec:
     definitions: list[dict[str, Any]] = field(default_factory=list)
     targets: list[dict[str, Any]] = field(default_factory=list)
     conjectures: list[dict[str, Any]] = field(default_factory=list)
+    claims: list[dict[str, Any]] = field(default_factory=list)
     known_results: list[dict[str, Any]] = field(default_factory=list)
     current_frontier: str = ""
     falsification_tests: list[str] = field(default_factory=list)
     computation_tasks: list[str] = field(default_factory=list)
     formalization_targets: list[str] = field(default_factory=list)
     refutation: dict[str, Any] = field(default_factory=dict)
+    prior_art: dict[str, Any] = field(default_factory=dict)
     source_path: str = ""
 
     @classmethod
@@ -161,6 +163,18 @@ class ProblemSpec:
         from .conjecture import load_conjectures
 
         return load_conjectures(self.conjectures)
+
+    def build_claims(self) -> list[Any]:
+        """Parse the declared claims -- the contributions prior art can kill."""
+        from .prior_art import load_claims
+
+        return load_claims(self.claims)
+
+    def prior_art_policy(self) -> Any:
+        """How thorough a search has to be before its silence counts as evidence."""
+        from .prior_art import PriorArtPolicy
+
+        return PriorArtPolicy.from_dict(self.prior_art)
 
 
 PROVE = "PROVE"

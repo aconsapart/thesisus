@@ -1,12 +1,25 @@
 # Architecture
 
-This workbench is problem-agnostic, and it works two tracks at once: proving
-statements and refuting them.
+This workbench is problem-agnostic, and it works three tracks: establishing that
+a claim is **not already known**, **refuting** it, and **proving** it.
+
+They run in that order because that is the order of cost to discover:
+
+| Track      | A claim dies because | Cost      | Stage                    |
+| ---------- | -------------------- | --------- | ------------------------ |
+| prior art  | it is already known  | a search  | `prior_art`              |
+| refutation | it is false          | a sweep   | `search_counterexamples` |
+| proof      | it is unprovable     | a campaign| `run_strategies`         |
 
 ## Core abstractions
 
 - `ProblemSpec`: definitions, **targets** (what to prove), **conjectures**
-  (what to break), known results, current frontier.
+  (what to break), **claims** (what prior art can kill), known results,
+  current frontier.
+- `Claim`: a separately attackable contribution. Attackable means someone could
+  hand you a single paper that settles it.
+- `Threat`: a piece of prior art aimed at one claim, verdict `KILLS` / `WOUNDS`
+  / `ADJACENT` / `BACKGROUND`.
 - `Conjecture`: a universally quantified claim with a machine-checkable
   predicate over declared variable domains. This is the refutable counterpart
   of a theorem -- a counterexample search can act on it with no model involved.
@@ -22,7 +35,10 @@ statements and refuting them.
 ## Graph
 
 ```text
-select_strategies
+prior_art                        day zero: is it already published?
+  |-- claims damaged --> claim_surgery --.
+  `-- claims clear ---------------------_/
+  -> select_strategies
   -> search_counterexamples      deterministic sweep, no model
   -> refute_lanes                model-proposed witnesses, each re-checked
   -> assess_refutation
@@ -35,10 +51,27 @@ select_strategies
   -> repeat
 ```
 
+`prior_art` runs once, at the start, and short-circuits on later iterations.
+Claims the literature damaged route through `claim_surgery` before any budget is
+spent defending them.
+
 Refutation runs **before** the proof lanes and can divert the iteration. Proving
 a statement that has a verified counterexample is the most expensive mistake the
 pipeline can make, so when the frontier dies the iteration goes straight to
 repair, and the next iteration's proof lanes get the repaired statement instead.
+
+## The prior-art discipline
+
+The model does the literature search; the rules that make its answer mean
+something are enforced in code, because "we looked and found nothing" is a claim
+about the search rather than about the literature. Threats are unioned over at
+least two passes that differ in phrasing, queries must cover four angles
+(mechanism, synonym, application, adjacent field), and a `CLEAR` verdict has to
+be backed by logged negative searches.
+
+The asymmetry mirrors `VERIFIED_EXHAUSTIVE` below: finding a killer is evidence
+however sloppily you looked, while finding nothing is evidence only if you
+looked properly. See [PRIOR_ART.md](PRIOR_ART.md).
 
 ## The verification discipline
 

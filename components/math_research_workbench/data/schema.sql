@@ -204,6 +204,122 @@ create table if not exists counterexample (
 create index if not exists idx_counterexample_verification on counterexample(verification);
 create index if not exists idx_conjecture_status on conjecture(status);
 
+-- A claim is a separately attackable contribution -- the unit prior art can
+-- kill. Distinct from `theorem` (which may be true and already known) and from
+-- `conjecture` (which may be novel and false).
+create table if not exists claim_contribution (
+    id integer primary key,
+    problem_id integer references problem(id),
+    slug text not null,
+    statement_md text not null,
+    kind text not null default 'CONTRIBUTION',
+    novelty_basis_md text,
+    status text not null check(status in ('KILLED','WOUNDED','CLEAR','UNDER_SEARCHED')) default 'UNDER_SEARCHED',
+    passes_searched integer default 0,
+    angles_covered_json text,
+    missing_angles_json text,
+    negative_queries integer default 0,
+    reasons_md text,
+    overclaims_json text,
+    surgery_required integer not null default 0,
+    created_at text default current_timestamp,
+    updated_at text default current_timestamp,
+    unique(problem_id, slug)
+);
+
+-- One sweep of the literature. Two passes must differ in phrasing or engine to
+-- count as independent; re-running one query twice is one search.
+create table if not exists prior_art_pass (
+    id integer primary key,
+    problem_id integer references problem(id),
+    run_id text,
+    iteration integer,
+    slug text not null,
+    phrasing text,
+    engine text,
+    angle text,
+    notes_md text,
+    created_at text default current_timestamp,
+    unique(problem_id, run_id, slug)
+);
+
+-- The search log. A query with results = 0 is a negative search, and negative
+-- searches are the only evidence that can earn a CLEAR verdict.
+create table if not exists prior_art_query (
+    id integer primary key,
+    pass_id integer references prior_art_pass(id),
+    problem_id integer references problem(id),
+    query_text text not null,
+    angle text,
+    engine text,
+    results integer not null default 0,
+    notes_md text,
+    created_at text default current_timestamp
+);
+
+-- A piece of prior art aimed at a specific claim.
+create table if not exists prior_art_threat (
+    id integer primary key,
+    problem_id integer references problem(id),
+    claim_id integer references claim_contribution(id),
+    pass_id integer references prior_art_pass(id),
+    verdict text not null check(verdict in ('KILLS','WOUNDS','ADJACENT','BACKGROUND')),
+    source text not null,
+    locator text,
+    angle text,
+    evidence_md text,
+    created_at text default current_timestamp,
+    unique(claim_id, source, locator)
+);
+
+create index if not exists idx_claim_status on claim_contribution(status);
+create index if not exists idx_threat_verdict on prior_art_threat(verdict);
+
+-- The claims board: what survives, what needs surgery, what has not been
+-- searched hard enough to say either way.
+create view if not exists v_claim_board as
+select c.slug,
+       c.status,
+       c.statement_md,
+       c.passes_searched,
+       c.negative_queries,
+       c.surgery_required,
+       (select count(*) from prior_art_threat t
+         where t.claim_id = c.id and t.verdict = 'KILLS') as kills,
+       (select count(*) from prior_art_threat t
+         where t.claim_id = c.id and t.verdict = 'WOUNDS') as wounds,
+       (select count(*) from prior_art_threat t
+         where t.claim_id = c.id and t.verdict = 'ADJACENT') as adjacent,
+       c.updated_at
+from claim_contribution c
+order by case c.status
+             when 'KILLED' then 0
+             when 'WOUNDED' then 1
+             when 'UNDER_SEARCHED' then 2
+             else 3
+         end,
+         c.updated_at desc;
+
+-- Everything that must be cited and distinguished, whether or not it wounds.
+create view if not exists v_prior_art_threats as
+select t.id, p.slug as problem, c.slug as claim, t.verdict, t.source, t.locator,
+       t.angle, t.evidence_md, t.created_at
+from prior_art_threat t
+left join problem p on p.id = t.problem_id
+left join claim_contribution c on c.id = t.claim_id
+where t.verdict in ('KILLS','WOUNDS','ADJACENT')
+order by case t.verdict when 'KILLS' then 0 when 'WOUNDS' then 1 else 2 end, t.created_at desc;
+
+-- The negative search log. A CLEAR verdict with nothing here is unsupported.
+create view if not exists v_negative_searches as
+select q.id, p.slug as problem, ps.slug as search_pass, q.angle, q.query_text,
+       q.engine, q.notes_md, q.created_at
+from prior_art_query q
+left join problem p on p.id = q.problem_id
+left join prior_art_pass ps on ps.id = q.pass_id
+where q.results = 0
+order by q.created_at desc;
+
 -- Refutations that survived independent checking.
 create view if not exists v_verified_counterexamples as
 select c.id,

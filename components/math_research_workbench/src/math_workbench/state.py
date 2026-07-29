@@ -25,6 +25,7 @@ class WorkbenchState(TypedDict):
     max_iterations: int
     parallel_strategies: int
     parallel_refutations: int
+    parallel_searches: int
     problem: dict[str, Any]
     strategies: list[dict[str, Any]]
     active_strategies: list[dict[str, Any]]
@@ -63,3 +64,18 @@ class WorkbenchState(TypedDict):
     repair_report: str
     frontier_falsified: bool
     resolution: Resolution
+
+    # --- prior-art track ----------------------------------------------
+    # Day-zero recon. `claims` are the separately attackable contributions;
+    # `prior_art_assessments` records, per claim, whether the literature already
+    # has it and whether the search was thorough enough for silence to count.
+    # `claims_file` is the maximally-defensible claim set, meant to be
+    # superseded in version control rather than quietly edited.
+    claims: list[dict[str, Any]]
+    prior_art_passes: list[dict[str, Any]]
+    prior_art_assessments: list[dict[str, Any]]
+    prior_art_report: str
+    claims_file: str
+    claim_surgery_report: str
+    claims_blocked: list[str]
+    prior_art_done: bool

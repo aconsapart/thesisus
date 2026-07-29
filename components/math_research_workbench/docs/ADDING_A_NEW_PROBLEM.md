@@ -2,16 +2,27 @@
 
 1. Copy `examples/generic_number_theory_problem.yaml`.
 2. Fill in title, background, definitions, targets, known results, and current frontier.
-3. Add a `conjectures:` block — the claims you want *attacked*, not proved.
-4. Copy `examples/generic_strategy_portfolio.yaml` and edit strategies, keeping
+3. Add a `claims:` block — the contributions you would put in an abstract. These
+   are what prior art can kill. See [PRIOR_ART.md](PRIOR_ART.md).
+4. Add a `conjectures:` block — the claims you want *attacked*, not proved.
+5. Copy `examples/generic_strategy_portfolio.yaml` and edit strategies, keeping
    at least one lane in `REFUTE` mode.
-5. Sweep first, before spending anything on a model:
+6. Check the literature before writing any code — the cheapest way for a claim
+   to die is for it to already exist:
+
+```bash
+python -m math_workbench.recon --problem your_problem.yaml --emit-prompts
+# run those passes, save the responses, then:
+python -m math_workbench.recon --problem your_problem.yaml --ingest pass1.md pass2.md
+```
+
+7. Sweep for counterexamples, before spending anything on a model:
 
 ```bash
 python -m math_workbench.sweep --problem your_problem.yaml
 ```
 
-6. Then run the full pipeline:
+8. Then run the full pipeline:
 
 ```bash
 python scripts/run_agent.py \

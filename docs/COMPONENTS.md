@@ -3,13 +3,19 @@
 This combined artifact packages the modular pieces built during the proof-search workflow.
 
 ## `components/math_research_workbench`
-Problem-agnostic LangGraph/LangChain workbench that works two tracks at once: proving statements and refuting them. Supports configurable problem specs, executable conjectures with an automated counterexample search, independent double-checking of every witness, strategy portfolios with `PROVE`/`REFUTE` lanes, local settings, SQLite logging, symbolic checks, CAS hooks, and formalization hooks.
+Problem-agnostic LangGraph/LangChain workbench that works three tracks, ordered by cost to discover: showing a claim is not already published (hostile prior-art recon), showing it is false (counterexample search), and proving it. Supports configurable problem specs, executable conjectures, independent double-checking of every witness, an enforced prior-art search standard, strategy portfolios with `PROVE`/`REFUTE` lanes, local settings, SQLite logging, symbolic checks, CAS hooks, and formalization hooks.
 
-The counterexample sweep runs standalone with no model and no API key:
+Two stages run standalone with no model and no API key:
 
 ```bash
 cd components/math_research_workbench
+
+# counterexample sweep — fully deterministic
 python -m math_workbench.sweep --problem examples/counterexample_demo_problem.yaml
+
+# prior-art recon — emit hostile search prompts, then grade the responses
+python -m math_workbench.recon --problem examples/counterexample_demo_problem.yaml --emit-prompts
+python -m math_workbench.recon --problem examples/counterexample_demo_problem.yaml --ingest pass1.md pass2.md
 ```
 
 See `components/math_research_workbench/docs/ARCHITECTURE.md` for the graph and the verification discipline.

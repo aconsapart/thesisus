@@ -99,6 +99,67 @@ conjectures:
       True. The sweep exhausts the space and reports VERIFIED_EXHAUSTIVE, which
       is evidence over [3, 500] and not a proof of the general statement.
 
+# `claims` are the separately attackable contributions -- the unit that prior art
+# can kill. Distinct from `targets` (which may be true and already known) and
+# from `conjectures` (which may be novel and false).
+#
+# These are deliberately written the way a first draft gets written, priority
+# language and all, so the recon has something real to cut. Two of them are
+# already in the literature and should come back KILLED or WOUNDED; that is the
+# feature working, not failing.
+claims:
+  - id: diagonal-enumeration
+    kind: CONTRIBUTION
+    statement: >
+      We introduce a novel diagonal enumeration order that surfaces minimal
+      counterexamples in multivariate predicate search.
+    novelty_basis: "Ordering candidate assignments by increasing sum of variable indices."
+    known_prior_art:
+      - "Standard combinatorial generation orders (colex, shortlex)."
+    search_terms:
+      - "diagonal enumeration counterexample search"
+      - "shell ordering multivariate predicate"
+      - "Cantor pairing enumeration order"
+    adjacent_fields:
+      - "combinatorial generation"
+      - "property-based testing"
+      - "constraint satisfaction / model finding"
+
+  - id: dual-evaluator-verification
+    kind: CONTRIBUTION
+    statement: >
+      Candidate counterexamples are accepted only when two independently written
+      evaluators agree, with disagreement reported rather than resolved.
+    novelty_basis: "Applying differential testing to the acceptance of mathematical witnesses."
+    known_prior_art:
+      - "Differential testing of compilers and numerical libraries."
+    search_terms:
+      - "differential testing independent oracle agreement"
+      - "cross-validation of symbolic and numeric evaluation"
+    adjacent_fields:
+      - "software testing"
+      - "computer algebra system validation"
+
+  - id: search-status-vocabulary
+    kind: CONTRIBUTION
+    statement: >
+      Separating an exhausted finite search from an aborted one, so that
+      exhaustive verification is claimed only when every point was evaluated
+      without error.
+    novelty_basis: "The distinction between VERIFIED_EXHAUSTIVE and OPEN as ledger statuses."
+    search_terms:
+      - "bounded model checking completeness threshold"
+      - "exhaustive search certificate finite domain"
+    adjacent_fields:
+      - "model checking"
+      - "SAT/SMT solving"
+
+# How thorough a search has to be before its silence counts as evidence.
+prior_art:
+  min_passes: 2
+  min_negative_queries: 3
+  required_angles: [MECHANISM, SYNONYM, APPLICATION, ADJACENT_FIELD]
+
 known_results:
   - status: PROVED
     statement: "d is multiplicative on coprime arguments."

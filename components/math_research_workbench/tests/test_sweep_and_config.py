@@ -86,6 +86,107 @@ def test_sweep_writes_a_report_file(demo_problem, tmp_path):
     assert "fermat-primes -- FALSIFIED" in text
 
 
+def test_demo_problem_declares_claims_for_the_prior_art_track(demo_problem):
+    spec = ProblemSpec.from_yaml(str(demo_problem))
+    claims = spec.build_claims()
+    assert {c.id for c in claims} == {
+        "diagonal-enumeration",
+        "dual-evaluator-verification",
+        "search-status-vocabulary",
+    }
+    # Deliberately written with priority language so the recon has something to cut.
+    assert any(c.overclaims() for c in claims)
+
+
+def test_emit_prompts_produces_one_hostile_prompt_per_angle(demo_problem, tmp_path):
+    from math_workbench.prior_art import ANGLES
+    from math_workbench.recon import emit_prompts
+
+    prompts = emit_prompts(str(demo_problem), out_dir=str(tmp_path))
+    assert set(prompts) == set(ANGLES)
+    for angle, text in prompts.items():
+        assert "You are a hostile reviewer" in text
+        assert f"Search angle for THIS pass: {angle}" in text
+        assert "```threat" in text and "```search" in text
+        assert "diagonal-enumeration" in text, "claims must appear in the prompt"
+    assert (tmp_path / "hostile_search_mechanism.md").exists()
+
+
+def test_emit_prompts_refuses_a_problem_with_no_claims(examples_dir):
+    from math_workbench.recon import emit_prompts
+
+    with pytest.raises(SystemExit, match="no `claims:` block"):
+        emit_prompts(str(examples_dir / "generic_number_theory_problem.yaml"))
+
+
+def test_ingest_grades_responses_and_persists_them(demo_problem, tmp_path):
+    from math_workbench.recon import ingest
+
+    mechanism = tmp_path / "mechanism.md"
+    mechanism.write_text(
+        '```search\n{"angle":"MECHANISM","query":"a","results":0}\n```\n'
+        '```search\n{"angle":"SYNONYM","query":"b","results":0}\n```\n'
+        '```search\n{"angle":"APPLICATION","query":"c","results":0}\n```\n'
+        '```search\n{"angle":"ADJACENT_FIELD","query":"d","results":0}\n```\n'
+        '```threat\n{"claim":"diagonal-enumeration","verdict":"KILLS",'
+        '"source":"Knuth (2011), TAOCP 4A","locator":"7.2.1.3"}\n```\n',
+        encoding="utf-8",
+    )
+    adjacent = tmp_path / "adjacent.md"
+    adjacent.write_text(
+        '```search\n{"angle":"ADJACENT_FIELD","query":"e","results":0}\n```\n'
+        '```search\n{"angle":"MECHANISM","query":"f","results":0}\n```\n'
+        '```search\n{"angle":"SYNONYM","query":"g","results":0}\n```\n'
+        '```search\n{"angle":"APPLICATION","query":"h","results":0}\n```\n'
+        '```threat\n{"claim":"dual-evaluator-verification","verdict":"WOUNDS",'
+        '"source":"McKeeman (1998), Differential Testing"}\n```\n',
+        encoding="utf-8",
+    )
+
+    db = str(tmp_path / "codex.sqlite")
+    result = ingest(
+        str(demo_problem),
+        [str(mechanism), str(adjacent)],
+        db=db,
+        claims_out=str(tmp_path / "CLAIMS.md"),
+        quiet=True,
+    )
+    assert result["killed"] == ["diagonal-enumeration"]
+    assert result["wounded"] == ["dual-evaluator-verification"]
+    assert result["clear"] == ["search-status-vocabulary"]
+    assert result["under_searched"] == []
+
+    from math_workbench.tools import codex
+
+    con = codex.connect(db)
+    board = dict(con.execute("select slug, status from claim_contribution").fetchall())
+    assert board["diagonal-enumeration"] == "KILLED"
+    assert con.execute("select count(*) from v_negative_searches").fetchone()[0] == 8
+    blocked = {r["slug"] for r in codex.claims_blocking_publication(con)}
+    assert blocked == {"diagonal-enumeration", "dual-evaluator-verification"}
+    con.close()
+
+    claims_text = (tmp_path / "CLAIMS.md").read_text(encoding="utf-8")
+    assert "search-status-vocabulary" in claims_text.split("## Requires surgery")[0]
+
+
+def test_ingest_of_a_single_pass_leaves_claims_under_searched(demo_problem, tmp_path):
+    """One pass cannot clear anything, however many queries it logs."""
+    from math_workbench.recon import ingest
+
+    only = tmp_path / "only.md"
+    only.write_text(
+        "".join(
+            f'```search\n{{"angle":"{a}","query":"q{i}","results":0}}\n```\n'
+            for i, a in enumerate(["MECHANISM", "SYNONYM", "APPLICATION", "ADJACENT_FIELD"])
+        ),
+        encoding="utf-8",
+    )
+    result = ingest(str(demo_problem), [str(only)], quiet=True)
+    assert result["clear"] == []
+    assert len(result["under_searched"]) == 3
+
+
 def test_generic_example_problem_still_parses(examples_dir):
     spec = ProblemSpec.from_yaml(str(examples_dir / "generic_number_theory_problem.yaml"))
     assert spec.build_conjectures(), "the generic example should demonstrate the conjecture schema"

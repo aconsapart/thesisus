@@ -177,6 +177,172 @@ false and look for where.
 {witness_format}
 """
 
+CLAIM_DECOMPOSITION_TEMPLATE = """
+Problem:
+{problem_summary}
+
+Current frontier:
+{frontier}
+
+Claims already declared in the problem spec:
+{claims}
+
+Task:
+Decompose this project into separately attackable claims, so each can be
+searched for independently.
+
+A claim is attackable only if someone could, in principle, hand you a single
+paper that settles it. "Our method is new" cannot be searched. "Using a diagonal
+enumeration order to surface minimal counterexamples in multivariate predicate
+search" can. If a claim needs three papers to refute, it is three claims.
+
+For each claim give:
+- id (short, kebab-case),
+- statement (one sentence, attackable as written),
+- kind: CONTRIBUTION, PRIORITY, IMPROVEMENT, or APPLICATION,
+- novelty_basis: the specific thing asserted to be new. Not "the approach" --
+  the exact mechanism, bound, construction, or combination,
+- known_prior_art: work you already know is close. Concede this upfront; a
+  search that pretends to start from zero is worthless,
+- search_terms: the phrases you would actually type, including the ones you
+  expect to fail,
+- adjacent_fields: at least two literatures where this idea might already live
+  under a different name.
+
+Then state, for the project as a whole, the single claim whose death would cost
+the most, and say why it is the most exposed.
+"""
+
+HOSTILE_SEARCH_TEMPLATE = """
+You are a hostile reviewer. Your job in this pass is to DESTROY the claims
+below, not to evaluate them fairly. Assume each one is already in the
+literature and that the authors simply failed to find it. You are looking for
+the citation that makes this project unnecessary.
+
+Project:
+{problem_summary}
+
+Claims under attack:
+{claims}
+
+Prior art the authors already concede:
+{conceded}
+
+{previous_findings}
+
+Search angle for THIS pass: {angle}
+{angle_guidance}
+
+Phrasing discipline for this pass: {phrasing}
+
+Task:
+1. Search by the assigned angle. Concepts hide under other vocabularies -- the
+   killing citation is routinely in another field, under a name the authors
+   would never think to type.
+2. Log EVERY query you issue, including the ones that return nothing. Negative
+   searches are the only evidence that can support a "no prior art" verdict.
+   A pass with no logged negative searches establishes nothing.
+3. For every piece of prior art you find, emit a threat block with a verdict:
+   - KILLS: the source already reports this claim. The claim is dead as written.
+   - WOUNDS: the source forces the claim to be narrowed to survive.
+   - ADJACENT: not a threat, but close enough that failing to cite it looks
+     like ignorance or concealment.
+   - BACKGROUND: context only.
+   Be harsh. If you are hesitating between WOUNDS and ADJACENT, choose WOUNDS.
+   The cost of an overstated threat is one paragraph of writing; the cost of a
+   missed one is the project.
+4. Read the closest source properly, not just its abstract. The caveat that
+   undoes a headline is usually stated honestly in the supplementary material.
+   If a reference implementation is public, say so and note whether its
+   defaults differ from what this project assumes -- a changed default is a
+   silent regime change.
+5. If a source already reports a finding this project treats as its own, say
+   plainly that this project is REPLICATING, not discovering.
+6. Finish with the steelman: the strongest version of the argument that this
+   entire project is already known, stated as a reviewer would state it in a
+   rejection.
+
+{block_format}
+"""
+
+ANGLE_GUIDANCE = {
+    "MECHANISM": (
+        "Search for the thing itself, in the vocabulary its inventors would use: "
+        "exact technical terms, formal names, the operation being performed."
+    ),
+    "SYNONYM": (
+        "Search for the same idea under every other name you can construct. Rename "
+        "the mechanism three ways and search each one. Older literature uses older words."
+    ),
+    "APPLICATION": (
+        "Search for where this would be used rather than for what it is. People who "
+        "needed it may have built it without ever naming it."
+    ),
+    "ADJACENT_FIELD": (
+        "Leave this literature entirely. Search the named adjacent fields, plus at least "
+        "one you choose yourself. Statistics, operations research, program analysis, formal "
+        "verification and combinatorics have all independently invented things a project "
+        "like this may believe are new."
+    ),
+}
+
+RECON_BLOCK_FORMAT = """
+Report findings in fenced blocks. Prose outside these blocks is commentary and
+is not recorded.
+
+For every query you issue -- including the ones that find nothing:
+
+```search
+{"pass": "<pass id>", "angle": "MECHANISM", "query": "the exact query text",
+ "engine": "where you searched", "results": 0, "notes": "claim:<claim id> or blank for all"}
+```
+
+For every piece of prior art you find:
+
+```threat
+{"claim": "<claim id>", "verdict": "KILLS", "source": "Author (Year), Title",
+ "locator": "Theorem 3.2 / arXiv:1234.5678 / doi", "angle": "SYNONYM",
+ "evidence": "what it says, and why it lands on this claim"}
+```
+
+Rules:
+- `results: 0` marks a negative search. Log them; they are the evidence.
+- One block per query and per threat. Do not batch several into one block.
+- Omit `claim` on a threat only if it genuinely lands on every claim.
+- A source you did not actually read is not a threat. Say so instead of
+  inventing a locator.
+"""
+
+CLAIM_SURGERY_TEMPLATE = """
+Project:
+{problem_summary}
+
+The prior-art search has killed or wounded the following claims:
+{damaged_claims}
+
+Full threat table:
+{threat_table}
+
+Task:
+Perform claim surgery. For each damaged claim:
+
+1. State exactly what the prior art establishes, in one sentence, fairly. Do not
+   minimise it. If the source did it better, say so.
+2. State what -- if anything -- is left. Be specific about the delta: a
+   different regime, a weaker hypothesis, an explicit constant, a
+   machine-checked version of a paper proof, a combination nobody assembled.
+3. Write the narrowed claim that survives the citation, as a sentence you would
+   be willing to defend in review with that paper on the table in front of you.
+4. Say whether the narrowed claim is still worth making. "This reduces to a
+   known result and should be dropped" is a legitimate and valuable answer;
+   a project with three honest claims beats one with nine defended badly.
+5. Remove every priority phrase the search has not earned. If a claim is
+   UNDER_SEARCHED, it does not get to say "first" or "novel" yet either.
+
+Then restate the maximally-defensible claim set for the whole project, ordered
+by how much each would cost to lose.
+"""
+
 REPAIR_TEMPLATE = """
 Problem:
 {problem_summary}

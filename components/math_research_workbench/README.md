@@ -1,11 +1,19 @@
 # Thesius Workbench
 
 A reusable, problem-agnostic automation scaffold for mathematical research that
-works two tracks at once: **proving statements and refuting them**.
+works three tracks: showing a claim is **not already known**, **refuting** it,
+and **proving** it — in that order, because that is the order of cost.
+
+| A claim dies because | Costs      | Stage                  |
+| -------------------- | ---------- | ---------------------- |
+| it is already known  | a search   | prior-art recon        |
+| it is false          | a sweep    | counterexample search  |
+| it is unprovable     | a campaign | proof lanes            |
 
 It generalizes the Erdős divisor-sum workflow into a configurable system that can be used for arbitrary math problems:
 
 - theorem/frontier tracking in SQLite;
+- **hostile prior-art recon with an enforced search standard**;
 - **executable conjectures and an automated counterexample search**;
 - **independent double-checking of every witness before it is believed**;
 - strategy portfolio execution with separate proof and refutation lanes;
@@ -37,6 +45,8 @@ Each iteration follows:
 
 ```text
 load problem spec
+  -> hostile prior-art recon                      [day zero, runs once]
+       claims killed or wounded? -> claim surgery
   -> select strategies (refutation lanes reserved first)
   -> sweep every conjecture for counterexamples   [deterministic, no model]
   -> run refutation lanes and check each proposed witness
@@ -257,6 +267,56 @@ keeps the theorem ledger honest.
 Running against a database created before this was added? `init_db` migrates it
 in place — SQLite cannot alter a CHECK constraint, so the affected tables are
 rebuilt and the report tells you what changed.
+
+## Prior art
+
+The cheapest way for a claim to die is for it to already exist. `claims` are the
+separately attackable contributions — not `targets` (which may be true and
+already known) and not `conjectures` (which may be novel and false):
+
+```yaml
+claims:
+  - id: diagonal-enumeration
+    statement: "We introduce a novel diagonal enumeration order for counterexample search."
+    novelty_basis: "Ordering candidate assignments by increasing sum of variable indices."
+    known_prior_art: ["Standard combinatorial generation orders."]
+    adjacent_fields: ["combinatorial generation", "property-based testing"]
+```
+
+The model does the searching; the standard is enforced in code, because "we
+looked and found nothing" is a claim about the search rather than about the
+literature. A verdict of `CLEAR` requires **at least two passes with different
+phrasings** (single searches reliably miss severe threats), **queries logged
+under all four angles** (mechanism, synonym, application, adjacent field —
+the killing citation is routinely in another literature), and **logged negative
+searches**, which are the only evidence that can support "nothing found".
+
+Priority language is detected and cannot be used unless the search earned it:
+"first", "novel", "we introduce", "no prior work", "state of the art".
+
+The asymmetry is the point, and mirrors `VERIFIED_EXHAUSTIVE` below: finding a
+killer is evidence however sloppily you looked, but finding nothing is evidence
+only if you looked properly.
+
+| Status           | Meaning                                                          |
+| ---------------- | ---------------------------------------------------------------- |
+| `KILLED`         | the literature already reports this claim                        |
+| `WOUNDED`        | it must be narrowed to survive a citation                        |
+| `CLEAR`          | nothing found, and the search met the standard                   |
+| `UNDER_SEARCHED` | nothing found, but the search has not earned the right to say so |
+
+Run it standalone — emit the hostile-search prompts, run them wherever the
+literature access is best, then grade what comes back:
+
+```bash
+python -m math_workbench.recon --problem your_problem.yaml --emit-prompts
+python -m math_workbench.recon --problem your_problem.yaml \
+  --ingest pass1.md pass2.md --claims-out CLAIMS.md
+```
+
+`CLAIMS.md` holds the maximally-defensible claim set: what survives as written,
+what needs surgery and why, and the banned overclaims. Supersede it; do not edit
+it quietly. See [docs/PRIOR_ART.md](docs/PRIOR_ART.md).
 
 ## Conjectures
 

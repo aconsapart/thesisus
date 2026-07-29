@@ -14,6 +14,22 @@
           "sort_desc": "created_at",
           "description": "Concrete witnesses and how each was checked. VERIFIED_EXACT means two independent evaluators agreed; CONTESTED means they disagreed and one of them has a bug; REJECTED means the claim did not survive checking."
         },
+        "claim_contribution": {
+          "sort_desc": "updated_at",
+          "description": "Separately attackable contributions. KILLED means the literature already reports it; WOUNDED means it must be narrowed; UNDER_SEARCHED means nothing was found but the search has not earned a clear verdict."
+        },
+        "prior_art_threat": {
+          "sort_desc": "created_at",
+          "description": "Prior art aimed at a specific claim. KILLS / WOUNDS / ADJACENT / BACKGROUND, worst verdict wins."
+        },
+        "prior_art_pass": {
+          "sort_desc": "created_at",
+          "description": "One sweep of the literature. Two passes must differ in phrasing or engine to count as independent."
+        },
+        "prior_art_query": {
+          "sort_desc": "created_at",
+          "description": "The search log. A row with results = 0 is a negative search, and negative searches are the only evidence that can earn a CLEAR verdict."
+        },
         "attempt": {"sort_desc": "created_at"},
         "falsification": {
           "sort_desc": "created_at",
@@ -23,6 +39,31 @@
         "formalization_job": {"sort_desc": "updated_at"}
       },
       "queries": {
+        "claim_board": {
+          "title": "Claim board",
+          "description": "Every declared contribution with its prior-art verdict.",
+          "sql": "select * from v_claim_board"
+        },
+        "blocking_publication": {
+          "title": "Claims that cannot be stated as written",
+          "description": "Killed, wounded, or using priority language the search has not earned.",
+          "sql": "select slug, status, statement_md, reasons_md from claim_contribution where status in ('KILLED','WOUNDED') or surgery_required = 1 order by updated_at desc"
+        },
+        "prior_art_threats": {
+          "title": "Prior art to cite and distinguish",
+          "description": "Everything found, including ADJACENT work that costs nothing but must still be cited.",
+          "sql": "select * from v_prior_art_threats"
+        },
+        "negative_searches": {
+          "title": "Negative search log",
+          "description": "Queries that returned nothing. A CLEAR verdict with no rows behind it is unsupported.",
+          "sql": "select * from v_negative_searches"
+        },
+        "search_angle_coverage": {
+          "title": "Search angle coverage",
+          "description": "Which angles were actually searched. Concepts hide under other vocabularies, so a gap here is where the killing citation is hiding.",
+          "sql": "select coalesce(nullif(q.angle,''),'(untagged)') as angle, count(*) as queries, sum(case when q.results = 0 then 1 else 0 end) as negative from prior_art_query q group by angle order by queries desc"
+        },
         "conjecture_board": {
           "title": "Conjecture board",
           "description": "Every declared conjecture with its verdict and witness counts.",

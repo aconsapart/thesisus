@@ -38,6 +38,7 @@ tabs = st.tabs([
     "Theorems",
     "Conjectures",
     "Counterexamples",
+    "Prior art",
     "Strategies",
     "Attempts",
     "Falsifications",
@@ -152,10 +153,66 @@ with tabs[3]:
     """), use_container_width=True)
 
 with tabs[4]:
+    st.header("Prior art")
+    st.caption(
+        "The third way a claim can die: not false, not unproved, just already "
+        "published. KILLED means the literature already reports it. WOUNDED means "
+        "it must be narrowed to survive a citation. UNDER_SEARCHED means nothing "
+        "was found but the search does not yet support saying so."
+    )
+
+    board = query("select * from v_claim_board")
+    if board.empty:
+        st.info(
+            "No claims declared. Add a `claims:` block to the problem YAML listing each "
+            "separately attackable contribution. Nothing here says the work is novel — "
+            "only that novelty was never checked."
+        )
+    else:
+        blocked = int((board["status"].isin(["KILLED", "WOUNDED"])).sum())
+        unsearched = int((board["status"] == "UNDER_SEARCHED").sum())
+        b1, b2, b3 = st.columns(3)
+        b1.metric("Clear", int((board["status"] == "CLEAR").sum()))
+        b2.metric("Killed or wounded", blocked, help="Cannot be stated as written.")
+        b3.metric(
+            "Under-searched",
+            unsearched,
+            help="Nothing found, but the search has not earned a clear verdict.",
+        )
+        if unsearched:
+            st.warning(
+                f"{unsearched} claim(s) are UNDER_SEARCHED. Finding a killer is evidence "
+                "however you looked; finding nothing is evidence only if you looked "
+                "properly — at least two independent passes, all four angles, and logged "
+                "negative searches."
+            )
+        st.dataframe(board, use_container_width=True)
+
+    st.subheader("Threats to cite and distinguish")
+    st.dataframe(query("select * from v_prior_art_threats"), use_container_width=True)
+
+    st.subheader("Negative searches")
+    st.caption(
+        "Queries that returned nothing. These are the evidence behind every CLEAR "
+        "verdict; a clear claim with no rows here is unsupported."
+    )
+    st.dataframe(query("select * from v_negative_searches"), use_container_width=True)
+
+    st.subheader("Full search log")
+    st.dataframe(query("""
+        select ps.slug as search_pass, ps.phrasing, ps.engine, q.angle, q.query_text,
+               q.results, q.notes_md, q.created_at
+        from prior_art_query q
+        left join prior_art_pass ps on ps.id = q.pass_id
+        order by q.created_at desc
+        limit 300
+    """), use_container_width=True)
+
+with tabs[5]:
     st.header("Strategies")
     st.dataframe(query("select id, slug, name, rank, status, score, updated_at from strategy order by rank, score desc"), use_container_width=True)
 
-with tabs[5]:
+with tabs[6]:
     st.header("Attempts")
     st.dataframe(query("""
         select a.id, p.slug as problem, s.slug as strategy, a.iteration, a.status, a.created_at,
@@ -167,7 +224,7 @@ with tabs[5]:
         limit 200
     """), use_container_width=True)
 
-with tabs[6]:
+with tabs[7]:
     st.header("Falsifications")
     st.dataframe(query("""
         select f.id, p.slug as problem, s.slug as strategy, f.severity, f.created_at,
@@ -178,7 +235,7 @@ with tabs[6]:
         order by f.created_at desc
     """), use_container_width=True)
 
-with tabs[7]:
+with tabs[8]:
     st.header("Computations")
     st.dataframe(query("""
         select c.id, p.slug as problem, c.iteration, c.name, c.status, c.code_path, c.data_path, c.report_path, c.created_at
@@ -188,7 +245,7 @@ with tabs[7]:
         limit 200
     """), use_container_width=True)
 
-with tabs[8]:
+with tabs[9]:
     st.header("Formalization")
     st.dataframe(query("""
         select f.id, p.slug as problem, f.backend, f.status, f.lean_path, f.updated_at
@@ -197,7 +254,7 @@ with tabs[8]:
         order by f.updated_at desc
     """), use_container_width=True)
 
-with tabs[9]:
+with tabs[10]:
     st.header("SQL")
     sql = st.text_area("Query", "select * from theorem limit 20", height=160)
     if st.button("Run query"):

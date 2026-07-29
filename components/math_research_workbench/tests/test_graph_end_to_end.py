@@ -10,6 +10,7 @@ a machine with only sympy and pyyaml.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -26,6 +27,22 @@ FALSE_WITNESS = 3   # 3^2 + 3 + 41 = 53, prime
 
 def canned_llm(prompt: str) -> str:
     """One honest witness, one bogus one, so both paths get exercised."""
+    if "You are a hostile reviewer" in prompt:
+        # A prior-art pass: one killer, plus the negative-search log a clear
+        # verdict would need. Each pass answers under its own assigned angle, so
+        # the two passes together cover more angles than either alone.
+        match = re.search(r"Search angle for THIS pass:\s*(\w+)", prompt)
+        angle = match.group(1) if match else "MECHANISM"
+        return (
+            f'```search\n{{"angle": "{angle}", "query": "combinatorial generation index sum", '
+            '"engine": "scholar", "results": 0}\n```\n'
+            f'```search\n{{"angle": "APPLICATION", "query": "minimal counterexample search order", "results": 0}}\n```\n'
+            '```threat\n{"claim": "diagonal-enumeration", "verdict": "KILLS", '
+            '"source": "Knuth (2011), TAOCP 4A", "locator": "7.2.1.3", '
+            '"evidence": "Generation by increasing index sum is textbook combinatorial generation."}\n```\n'
+        )
+    if "Perform claim surgery" in prompt:
+        return "Narrowed: the contribution is the application to predicate search, not the ordering itself."
     if "Report every candidate counterexample" in prompt:
         return (
             "I attacked the boundary of the declared range.\n"
@@ -59,6 +76,56 @@ def run_result(tmp_path, monkeypatch, demo_problem, examples_dir):
 def test_graph_has_a_refutation_stage_before_the_proof_stage():
     nodes = set(build_nodes())
     assert {"search_counterexamples", "refute_lanes", "assess_refutation", "repair"} <= nodes
+
+
+def test_graph_has_a_prior_art_stage():
+    assert {"prior_art", "claim_surgery"} <= set(build_nodes())
+
+
+def test_prior_art_runs_first_and_kills_a_claim_that_is_already_published(run_result):
+    final, _db, _out = run_result
+    by_id = {a["claim_id"]: a for a in final["prior_art_assessments"]}
+    assert by_id["diagonal-enumeration"]["status"] == "KILLED"
+    assert "diagonal-enumeration" in final["claims_blocked"]
+    assert final["claim_surgery_report"], "a damaged claim must trigger surgery"
+
+
+def test_unsearched_claims_do_not_come_back_clear(run_result):
+    """The canned pass finds nothing against these two, which is not the same as clearing them."""
+    final, _db, _out = run_result
+    by_id = {a["claim_id"]: a for a in final["prior_art_assessments"]}
+    for claim_id in ("dual-evaluator-verification", "search-status-vocabulary"):
+        assert by_id[claim_id]["status"] in {"UNDER_SEARCHED", "CLEAR"}
+        if by_id[claim_id]["status"] == "UNDER_SEARCHED":
+            assert by_id[claim_id]["reasons"]
+
+
+def test_priority_language_is_flagged_when_the_search_did_not_earn_it(run_result):
+    final, _db, _out = run_result
+    by_id = {a["claim_id"]: a for a in final["prior_art_assessments"]}
+    assert by_id["diagonal-enumeration"]["unearned_overclaims"], (
+        "'We introduce a novel...' behind a KILLED verdict must be flagged"
+    )
+
+
+def test_the_run_writes_a_claims_file(run_result):
+    _final, _db, out = run_result
+    claims_file = out / "CLAIMS.md"
+    assert claims_file.exists()
+    text = claims_file.read_text(encoding="utf-8")
+    assert "Requires surgery before use" in text
+    assert "Claim surgery" in text, "the surgery output is appended, not written to a separate file"
+
+
+def test_the_ledger_records_the_prior_art_search(run_result):
+    _final, db, _out = run_result
+    con = codex.connect(db)
+    board = dict(con.execute("select slug, status from claim_contribution").fetchall())
+    assert board["diagonal-enumeration"] == "KILLED"
+    assert con.execute("select count(*) from prior_art_threat where verdict='KILLS'").fetchone()[0] >= 1
+    assert con.execute("select count(*) from v_negative_searches").fetchone()[0] > 0
+    assert [r["slug"] for r in codex.claims_blocking_publication(con)]
+    con.close()
 
 
 def build_nodes():
