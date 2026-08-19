@@ -39,7 +39,9 @@ app.add_typer(add_app, name="add")
 app.add_typer(config_app, name="config")
 app.add_typer(paper_app, name="paper")
 
-console = Console(width=220)
+# highlight=False: rich's auto-highlighting would insert color codes inside
+# printed paths, which breaks copy/paste and substring checks on the output.
+console = Console(width=220, highlight=False)
 DEFAULT_DB = "proof_codex.sqlite"
 CONFIG_PATH = Path(os.environ.get("THESIUS_CONFIG", "config/local_cli_settings.json"))
 

@@ -16,7 +16,12 @@ def app_test(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(sys, "argv", ["streamlit_app.py", "--db", str(tmp_path / "codex.sqlite")])
 
     def make() -> AppTest:
-        return AppTest.from_file(str(APP), default_timeout=30)
+        at = AppTest.from_file(str(APP), default_timeout=30)
+        # Non-empty test secrets mask any real .streamlit/secrets.toml on the
+        # machine (e.g. a deployed OIDC config), which would otherwise gate
+        # every test behind the real sign-in screen.
+        at.secrets["thesius_password"] = ""
+        return at
 
     return make
 
@@ -26,7 +31,7 @@ def has_password_field(at: AppTest) -> bool:
 
 
 def main_ui_rendered(at: AppTest) -> bool:
-    return any("Research projects" in str(m.value) for m in at.markdown)
+    return any("Proven results" in str(m.value) for m in at.markdown)
 
 
 def submit_login(at: AppTest, password: str) -> AppTest:

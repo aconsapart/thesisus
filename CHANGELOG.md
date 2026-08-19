@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Changed
+- Simplified the Streamlit dashboard to a read-only "proven results" view:
+  status metrics, proven theorems with their proofs and peer-review scores,
+  and a search over proofs only. Removed the task-prompting UI (study-prompt
+  template, queued computations, side questions, SQL console) — proof work is
+  now scored by the peer-review pipeline instead of prompted per task.
+
 ### Added
 - Paper pipeline (`thesius paper export|write|review`): generate a LaTeX paper
   from a theorem's codex records and run an LLM peer review of it. Adapted

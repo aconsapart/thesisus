@@ -52,7 +52,8 @@ docker compose up --build            # add THESIUS_PASSWORD=... in front for pas
 ```
 
 Open http://localhost:8501. Confirm you hit the sign-in screen (if you
-configured auth), sign in, and create a test project. Data persists in the
+configured auth), sign in, and confirm the proven-results dashboard loads
+(seed a PROVED theorem via the `thesius` CLI to see content). Data persists in the
 `codex-data` Docker volume.
 
 ## Step 4 — Deploy to the internet

@@ -20,7 +20,7 @@ SQLite is the canonical ledger. All frontends should read from and write to SQLi
 
 Datasette is a read-only exploration and audit surface. It is ideal for SQL queries, filters, JSON API access, and publishing the ledger.
 
-Streamlit is the active control panel. It is ideal for adding theorems, attempts, falsifications, strategy status changes, and browsing graphs and diagnostics.
+Streamlit is the read-only proven-results dashboard: status metrics, proven theorems with their proofs, search over proofs, and peer-review scores. Records are added via the CLI and agents.
 
 ## Important design principle
 

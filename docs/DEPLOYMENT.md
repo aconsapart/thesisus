@@ -2,9 +2,10 @@
 
 The web UI is the Streamlit dashboard at
 `components/theorem_codex/apps/streamlit_app.py`, backed by a SQLite database
-that the app creates and initializes automatically on first run. Because the
-app **writes** to that database (projects, attempts, computations), any real
-deployment needs a persistent disk for the DB file. The Docker setup below
+that the app creates and initializes automatically on first run. The dashboard
+is read-only — proven results, their proofs, and peer-review scores; proof
+work is recorded by the CLI and agents — so a real deployment needs a
+persistent disk holding the DB file those tools write. The Docker setup below
 handles that with a volume.
 
 ## Run locally with Docker

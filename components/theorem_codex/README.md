@@ -8,7 +8,7 @@ This package is tuned for the Erdős divisor-sum project, but the schema is gene
 
 - SQLite database as the canonical theorem ledger.
 - Datasette for read-only browsing, filtering, SQL queries, and JSON API exploration.
-- Streamlit dashboard for active review, theorem/strategy CRUD, diagnostics, and notes.
+- Streamlit dashboard: a read-only view of proven results, their proofs, and peer-review scores.
 - Seed data for the current Erdős project frontier.
 - Falsification ledger, attempt ledger, computation ledger, formalization queue, artifacts, tags, and theorem dependencies.
 
@@ -58,8 +58,8 @@ make datasette
 
 ## Suggested workflow
 
-1. Use Streamlit to add/update theorem frontiers, strategies, claims, attempts, falsifications, computations, and dependencies.
-2. Use Datasette for read-only audit, browsing, filtering, and SQL exploration.
+1. Use the `thesius` CLI and agents to record theorems, strategies, claims, attempts, falsifications, and computations.
+2. Use Datasette for read-only audit, browsing, filtering, and SQL exploration; use Streamlit for the proven-results dashboard.
 3. Let proof-search agents write attempts and computations into SQLite.
 4. Store large CSV/Parquet outputs externally and link them in the `artifact` table.
 5. Keep every claim labeled using the project status discipline.
