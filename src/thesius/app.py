@@ -26,16 +26,19 @@ from .db import (
     table_count,
     upsert_theorem,
 )
+from .ingest import ingest_ai_scientist
 
 app = typer.Typer(help="Thesius CLI/TUI", no_args_is_help=True, invoke_without_command=True)
 serve_app = typer.Typer(help="Launch optional UIs")
 run_app = typer.Typer(help="Run agents and external tools")
 add_app = typer.Typer(help="Add records to the codex")
 config_app = typer.Typer(help="Manage local JSON settings")
+ingest_app = typer.Typer(help="Ingest external experiment results into the codex")
 app.add_typer(serve_app, name="serve")
 app.add_typer(run_app, name="run")
 app.add_typer(add_app, name="add")
 app.add_typer(config_app, name="config")
+app.add_typer(ingest_app, name="ingest")
 
 console = Console(width=220)
 DEFAULT_DB = "proof_codex.sqlite"
@@ -276,6 +279,35 @@ def add_falsification_cmd(
         console.print(f"[green]Added falsification[/green] id={fid}")
     finally:
         con.close()
+
+
+@ingest_app.command("ai-scientist")
+def ingest_ai_scientist_cmd(
+    directory: str = typer.Argument(..., help="AI-Scientist symbolic_math template or idea results directory containing run_* subdirectories."),
+    db: Optional[str] = typer.Option(None, "--db", help="SQLite database path. Overrides configured database.path."),
+):
+    """Ingest AI-Scientist symbolic_math experiment results into the codex."""
+    db_path = _db_path(db)
+    try:
+        records, summary = ingest_ai_scientist(directory, db_path)
+    except FileNotFoundError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1)
+    for warning in records.warnings:
+        console.print(f"[yellow]Warning:[/yellow] {warning}")
+    if not records.runs:
+        console.print(f"[red]No run_* directories with final_info.json found in[/red] {records.source_dir}")
+        raise typer.Exit(1)
+    console.print(f"[green]Ingested[/green] {records.source_dir} -> {db_path} (strategy {records.strategy_slug})")
+    table = Table(title="AI-Scientist ingest summary")
+    table.add_column("Record")
+    table.add_column("Written", justify="right")
+    table.add_column("Skipped", justify="right")
+    table.add_row("theorem", str(summary.theorems), "")
+    table.add_row("strategy", str(summary.strategies), "")
+    table.add_row("attempt", str(summary.attempts), str(summary.attempts_skipped))
+    table.add_row("artifact", str(summary.artifacts), str(summary.artifacts_skipped))
+    console.print(table)
 
 
 @config_app.command("set")
