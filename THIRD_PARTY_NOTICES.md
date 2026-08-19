@@ -21,6 +21,10 @@ Note in particular:
   into any legal terms under which this repository is distributed.
 - The bundled LaTeX template includes a mandatory Disclosure paragraph in
   every generated paper; do not remove it.
+- The rest of this repository is licensed under the GNU AGPL v3.0 or later
+  (`LICENSE.txt`). The files listed above are NOT covered by that grant: they
+  remain under The AI Scientist Source Code License v1.0 below, and its
+  Section 3.2 restrictions travel with them under Section 3.3.
 
 ---
 

@@ -52,6 +52,7 @@
     <li><a href="#testing">Testing</a></li>
     <li><a href="#roadmap">Roadmap</a></li>
     <li><a href="#contributing">Contributing</a></li>
+    <li><a href="#license">License</a></li>
     <li><a href="#contact">Contact</a></li>
     <li><a href="#acknowledgments">Acknowledgments</a></li>
   </ol>
@@ -293,6 +294,21 @@ pytest -q
 <p align="right">(<a href="#top">back to top</a>)</p>
 
 <!-- CONTACT -->
+## License
+
+Thesius is licensed under the **GNU Affero General Public License v3.0 or
+later** (see `LICENSE.txt`), with one carve-out: the paper pipeline under
+`src/thesius/paper/` is adapted from
+[SakanaAI/AI-Scientist](https://github.com/SakanaAI/AI-Scientist) and remains
+governed by **The AI Scientist Source Code License v1.0** (full text in
+`THIRD_PARTY_NOTICES.md`). That license's Section 3.2 use restrictions apply
+to those files and to manuscripts generated with them — in particular, papers
+produced by `thesius paper write` must prominently disclose that they are
+machine-generated (the bundled LaTeX template does this; do not remove its
+Disclosure paragraph).
+
+<p align="right">(<a href="#top">back to top</a>)</p>
+
 ## Contact
 
 Project Link: [https://github.com/aconsapart/thesys](https://github.com/aconsapart/thesys)

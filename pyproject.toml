@@ -6,6 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "thesius"
 version = "0.3.0"
 description = "Local-first theorem codex with Python CLI/TUI, Datasette, Streamlit, and research-agent components."
+license = {text = "AGPL-3.0-or-later"}
 requires-python = ">=3.10"
 dependencies = [
   "typer>=0.12",
