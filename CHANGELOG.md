@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Paper pipeline (`thesius paper export|write|review`): generate a LaTeX paper
+  from a theorem's codex records and run an LLM peer review of it. Adapted
+  from SakanaAI/AI-Scientist (see THIRD_PARTY_NOTICES.md). New optional
+  extras: `paper`, `paper-aider`.
+- The pipeline is gated behind the `features.paper` feature flag (off by
+  default): `thesius config set features.paper true` or `THESIUS_FEATURE_PAPER=1`.
+
+
 ## v1.0.0
 
 ### Added or Changed

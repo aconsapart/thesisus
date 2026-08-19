@@ -28,9 +28,22 @@ agents = [
 test = [
   "pytest>=8.0",
 ]
+paper = [
+  "anthropic>=0.40",
+  "pypdf",
+  "pymupdf",
+  "pymupdf4llm",
+  "requests",
+]
+paper-aider = [
+  "aider-chat",
+]
 
 [project.scripts]
 thesius = "thesius.app:app"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+thesius = ["paper/latex/*", "paper/fewshot_examples/*"]

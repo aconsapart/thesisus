@@ -26,6 +26,7 @@ from .db import (
     table_count,
     upsert_theorem,
 )
+from .paper.cli import paper_app
 
 app = typer.Typer(help="Thesius CLI/TUI", no_args_is_help=True, invoke_without_command=True)
 serve_app = typer.Typer(help="Launch optional UIs")
@@ -36,6 +37,7 @@ app.add_typer(serve_app, name="serve")
 app.add_typer(run_app, name="run")
 app.add_typer(add_app, name="add")
 app.add_typer(config_app, name="config")
+app.add_typer(paper_app, name="paper")
 
 console = Console(width=220)
 DEFAULT_DB = "proof_codex.sqlite"

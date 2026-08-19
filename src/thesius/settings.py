@@ -14,10 +14,12 @@ def load_settings(path: Path = CONFIG_PATH) -> dict[str, Any]:
         return {}
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"Invalid JSON settings file: {path}") from exc
+    except json.JSONDecodeError:
+        # Match app.py's tolerance: a corrupt config falls back to defaults
+        # instead of crashing some subcommands and not others.
+        return {}
     if not isinstance(data, dict):
-        raise ValueError(f"Settings file must contain a JSON object: {path}")
+        return {}
     return data
 
 
@@ -59,12 +61,35 @@ def set_setting(dotted_key: str, value: Any) -> None:
     save_settings(data)
 
 
+TRUTHY_VALUES = {"1", "true", "yes", "on"}
+
+
+def feature_enabled(name: str, default: bool = False) -> bool:
+    """Check a feature flag.
+
+    Resolution order:
+    1. THESIUS_FEATURE_<NAME> environment variable,
+    2. features.<name> in config/local_cli_settings.json,
+    3. the provided default.
+    """
+    env = os.environ.get(f"THESIUS_FEATURE_{name.upper()}")
+    if env is not None:
+        return env.strip().lower() in TRUTHY_VALUES
+    value = get_setting(f"features.{name}")
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in TRUTHY_VALUES
+    return default
+
+
 def get_database_path(cli_db: Optional[str] = None) -> str:
     """Resolve the SQLite database path.
 
-    Priority:
+    Priority (identical to app.py's _db_path):
     1. explicit CLI --db value
-    2. config/local_cli_settings.json keys: database.path, database_path, db_path, or db
+    2. config/local_cli_settings.json keys: database.path, database_path,
+       db_path, database, or db
     3. THESIUS_DB environment variable
     4. DEFAULT_DB
     """
@@ -72,10 +97,10 @@ def get_database_path(cli_db: Optional[str] = None) -> str:
         return cli_db
 
     data = load_settings()
-    for key in ("database.path", "database_path", "db_path", "db"):
+    for key in ("database.path", "database_path", "db_path", "database", "db"):
         val = nested_get(data, key) if "." in key else data.get(key)
-        if isinstance(val, str) and val.strip():
-            return val
+        if val and not isinstance(val, dict):
+            return str(val)
 
     env = os.environ.get("THESIUS_DB")
     if env:
